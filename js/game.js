@@ -13,6 +13,10 @@
   const titleOverlay = document.getElementById("titleOverlay");
   const overOverlay = document.getElementById("overOverlay");
   const muteBtn = document.getElementById("muteBtn");
+  const missionBar = document.getElementById("missionBar");
+  const scrapBar = document.getElementById("scrapBar");
+  const dexBar = document.getElementById("dexBar");
+  const TYPE_KEYS = Object.keys(PLUSH_TYPES);
 
   const engine = Engine.create({
     enableSleeping: true,
@@ -36,6 +40,11 @@
     returnDist: 0,
     lastGrip: null,
     strainTimer: 0,
+    collection: Fun.emptyCollection(Object.keys(PLUSH_TYPES)),
+    consolation: Fun.emptyConsolation(),
+    streak: Fun.emptyStreak(),
+    mission: Fun.pickMission(Object.keys(PLUSH_TYPES)),
+    missionDone: false,
     debug: new URLSearchParams(location.search).has("debug"),
   };
 
@@ -127,6 +136,8 @@
       squashX: 0,
       squashY: 0,
       collected: false,
+      react: "idle",
+      reactT: 0,
     };
   }
 
@@ -207,11 +218,16 @@
     const best = scored[0];
     const rival = scored[1];
     const crowded = !!(rival && rival.coverage > 0.28);
+    const bonus = Fun.clawBonus(state.streak) + Fun.pendingBoost(state.consolation);
+    state.consolation = Fun.consumeBoost(state.consolation);
     const rolled = Grip.roll({
       coverage: best.coverage,
       crowded,
       radius: best.p.radius,
       points: best.p.points,
+      x: claw.x,
+      y: claw.y,
+      bonus,
     });
     if (rolled.kind === "miss") return [];
 
@@ -241,8 +257,17 @@
       Composite.add(engine.world, constraint);
       state.grips.push({ ...g, constraint });
       claw.open = g.fingerGap;
+      g.plush.react = "grabbed";
+      g.plush.reactT = 0.5;
     }
-    state.lastGrip = found[0] ? { kind: found[0].kind, coverage: found[0].coverage, slipAt: found[0].slipAt } : { kind: "miss" };
+    state.lastGrip = found[0]
+      ? {
+          kind: found[0].kind,
+          coverage: found[0].coverage,
+          slipAt: found[0].slipAt,
+          location: found[0].location,
+        }
+      : { kind: "miss" };
     if (state.grips.length) {
       const kind = state.grips[0].kind;
       if (kind === "hold") toast("잡았다…?", "");
@@ -291,9 +316,47 @@
     Body.setAngularVelocity(g.plush.body, rand(-0.35, 0.35));
     AudioFx.slip();
     Particles.emit(g.plush.body.position.x, g.plush.body.position.y, "slip", 18);
-    toast(slipMessage(reason || g.kind), "fail");
+    g.plush.react = "dropped";
+    g.plush.reactT = 0.9;
+    const extra = applySlipRewards();
+    toast(extra || slipMessage(reason || g.kind), extra ? "win" : "fail");
     claw.open = Math.max(claw.open, 0.62);
     if (navigator.vibrate) navigator.vibrate(18);
+  }
+
+  function applySlipRewards() {
+    state.streak = Fun.noteSlip(state.streak);
+    state.consolation = Fun.awardSlip(state.consolation);
+    let extra = null;
+    if (state.consolation.reward === "coin") {
+      state.coins += 1;
+      coinEl.textContent = String(state.coins);
+      extra = "별사탕 3개! 코인 +1";
+    } else if (state.consolation.reward === "boost") {
+      extra = "다음 집게가 조금 세져요";
+    }
+    syncKidHud();
+    return extra;
+  }
+
+  function syncKidHud() {
+    if (!missionBar || !scrapBar || !dexBar) return;
+    const mission = state.mission;
+    const have = Fun.missionCaught(mission, state.collection);
+    missionBar.textContent = state.missionDone
+      ? `부탁 완료! ${mission.label}`
+      : `부탁 ${mission.label} ${have}/${mission.need}`;
+    missionBar.classList.toggle("done", state.missionDone);
+    scrapBar.textContent = `♥ ${state.consolation.scraps}`;
+    dexBar.innerHTML = "";
+    for (const type of TYPE_KEYS) {
+      const dot = document.createElement("span");
+      const n = Fun.typeCount(state.collection, type);
+      dot.className = "dex-dot" + (n ? " on" : "");
+      dot.style.setProperty("--c", PLUSH_TYPES[type].color);
+      dot.title = `${PLUSH_TYPES[type].name} ${n}`;
+      dexBar.appendChild(dot);
+    }
   }
 
   function carryProgress() {
@@ -317,6 +380,7 @@
       g.plush.slipDrop = danger * 0.42;
       g.plush.slipSpin = Math.sin(performance.now() / 80) * danger * 0.55;
 
+      if (claw.z > 0.2) g.plush.react = "airborne";
       if (claw.z > 0.42) {
         setAirborne(g.plush, true);
         if (g.kind === "hold" || g.kind === "late") {
@@ -362,15 +426,27 @@
   function collect(plush) {
     if (plush.collected) return;
     plush.collected = true;
+    plush.react = "success";
     Composite.remove(engine.world, plush.body);
     state.score += plush.points;
     state.prizes += 1;
+    state.collection = Fun.recordCatch(state.collection, plush.type);
+    state.streak = Fun.noteCatch(state.streak);
     scoreEl.textContent = String(state.score);
     prizeCount.textContent = String(state.prizes);
     AudioFx.win();
-    Particles.emit(CHUTE.x, CHUTE.y, "win", 42);
-    toast(`${plush.name} +${plush.points}`, "win");
+    const juice = Math.round(42 * Fun.juiceScale(state.streak));
+    Particles.emit(CHUTE.x, CHUTE.y, "win", juice);
+    let msg = `${plush.name} +${plush.points}`;
+    if (!state.missionDone && Fun.missionComplete(state.mission, state.collection)) {
+      state.missionDone = true;
+      state.coins += 1;
+      coinEl.textContent = String(state.coins);
+      msg = `부탁 성공! ${plush.name} +${plush.points}`;
+    }
+    toast(msg, "win");
     addPrizeChip(plush.type);
+    syncKidHud();
     if (navigator.vibrate) navigator.vibrate(28);
 
     const remain = state.plushes.filter((p) => !p.collected);
@@ -390,7 +466,7 @@
     c.height = 96;
     const cctx = c.getContext("2d");
     cctx.scale(2, 2);
-    Draw.plush(cctx, { type, x: 24, y: 28, radius: 14, angle: -0.12, liftZ: 0, blink: 1 });
+    Draw.plush(cctx, { type, x: 24, y: 28, radius: 14, angle: -0.12, liftZ: 0, blink: 1, react: "success" });
     prizeRail.appendChild(c);
   }
 
@@ -435,8 +511,11 @@
     AudioFx.over();
     document.getElementById("overScore").textContent = String(state.score);
     document.getElementById("overPrizes").textContent = String(state.prizes);
-    document.getElementById("overEyebrow").textContent =
-      state.prizes === 0 ? "집게가 오늘따라 더 약해요" : "오늘 밤의 수확";
+    document.getElementById("overEyebrow").textContent = state.missionDone
+      ? "부탁도 해냈어요"
+      : state.prizes === 0
+        ? "집게가 오늘따라 더 약해요"
+        : "오늘 밤의 수확";
     overOverlay.classList.remove("hidden");
   }
 
@@ -450,6 +529,11 @@
       state.coins = START_COINS;
       state.score = 0;
       state.prizes = 0;
+      state.collection = Fun.emptyCollection(TYPE_KEYS);
+      state.consolation = Fun.emptyConsolation();
+      state.streak = Fun.emptyStreak();
+      state.mission = Fun.pickMission(TYPE_KEYS);
+      state.missionDone = false;
     }
     coinEl.textContent = String(state.coins);
     scoreEl.textContent = String(state.score);
@@ -469,6 +553,7 @@
     overOverlay.classList.add("hidden");
     resetMatch(true);
     state.ignoreGrab = 0.35;
+    syncKidHud();
     setMode("aiming");
   }
 
@@ -486,6 +571,10 @@
       const s = clamp(spd * 0.012, 0, 0.14);
       p.squashX = v.x === 0 && v.y === 0 ? 0 : (Math.abs(v.x) > Math.abs(v.y) ? s : -s * 0.6);
       p.squashY = -p.squashX * 0.8;
+      if (p.reactT > 0) {
+        p.reactT -= dt;
+        if (p.reactT <= 0 && p.react !== "airborne" && p.react !== "grabbed") p.react = "idle";
+      }
     }
   }
 
@@ -568,7 +657,10 @@
           setFloor(p);
           if (collectIfInChute(p)) collect(p);
           else {
-            toast("입구까지 못 왔어…", "fail");
+            p.react = "dropped";
+            p.reactT = 0.9;
+            const extra = applySlipRewards();
+            toast(extra || "입구까지 못 왔어…", extra ? "win" : "fail");
             Body.applyForce(p.body, p.body.position, { x: 0, y: 0.002 });
           }
         }
@@ -642,6 +734,7 @@
         blink: p.blink,
         squashX: p.squashX,
         squashY: p.squashY,
+        react: p.react || "idle",
       });
     }
 
@@ -658,6 +751,7 @@
         blink: p.blink,
         squashX: p.squashX,
         squashY: p.squashY,
+        react: p.react || "idle",
       });
     }
 
@@ -712,6 +806,7 @@
   makeClawBodies();
   fillBox(SPAWN_BAG);
   setupBulbs();
+  syncKidHud();
   Input.init();
   resize();
   window.addEventListener("resize", resize);
@@ -756,6 +851,18 @@
         claw: { x: claw.x, y: claw.y, z: claw.z, open: claw.open },
         grips: state.grips.length,
         lastGrip: state.lastGrip,
+        collection: {
+          unique: Fun.uniqueCount(state.collection),
+          total: TYPE_KEYS.length,
+        },
+        consolation: { scraps: state.consolation.scraps, boost: Fun.pendingBoost(state.consolation) },
+        streak: state.streak,
+        mission: {
+          type: state.mission.type,
+          need: state.mission.need,
+          label: state.mission.label,
+          done: state.missionDone,
+        },
       };
     },
     start: startGame,

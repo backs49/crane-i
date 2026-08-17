@@ -58,6 +58,7 @@ const Draw = {
   },
 
   face(ctx, x, y, s, blink) {
+    const react = this._react || "idle";
     ctx.fillStyle = "rgba(255, 120, 150, 0.38)";
     ctx.beginPath();
     ctx.ellipse(x - s * 0.34, y + s * 0.12, s * 0.16, s * 0.1, 0, 0, Math.PI * 2);
@@ -66,27 +67,76 @@ const Draw = {
     ctx.ellipse(x + s * 0.34, y + s * 0.12, s * 0.16, s * 0.1, 0, 0, Math.PI * 2);
     ctx.fill();
 
-    const open = 0.12 + blink * 0.88;
     ctx.fillStyle = "#2a123d";
-    ctx.beginPath();
-    ctx.ellipse(x - s * 0.2, y - s * 0.02, s * 0.09, s * 0.12 * open, 0, 0, Math.PI * 2);
-    ctx.ellipse(x + s * 0.2, y - s * 0.02, s * 0.09, s * 0.12 * open, 0, 0, Math.PI * 2);
-    ctx.fill();
-
-    if (open > 0.45) {
-      ctx.fillStyle = "#fff";
-      ctx.beginPath();
-      ctx.arc(x - s * 0.23, y - s * 0.06, s * 0.035, 0, Math.PI * 2);
-      ctx.arc(x + s * 0.17, y - s * 0.06, s * 0.035, 0, Math.PI * 2);
-      ctx.fill();
-    }
-
     ctx.strokeStyle = "#2a123d";
     ctx.lineWidth = 1.6;
     ctx.lineCap = "round";
-    ctx.beginPath();
-    ctx.arc(x, y + s * 0.16, s * 0.1, 0.15, Math.PI - 0.15);
-    ctx.stroke();
+
+    if (react === "dropped") {
+      ctx.beginPath();
+      ctx.moveTo(x - s * 0.28, y - s * 0.1);
+      ctx.lineTo(x - s * 0.12, y + s * 0.06);
+      ctx.moveTo(x - s * 0.12, y - s * 0.1);
+      ctx.lineTo(x - s * 0.28, y + s * 0.06);
+      ctx.moveTo(x + s * 0.12, y - s * 0.1);
+      ctx.lineTo(x + s * 0.28, y + s * 0.06);
+      ctx.moveTo(x + s * 0.28, y - s * 0.1);
+      ctx.lineTo(x + s * 0.12, y + s * 0.06);
+      ctx.stroke();
+      ctx.fillStyle = "#ffe36a";
+      this.star(ctx, x + s * 0.48, y - s * 0.28, s * 0.14, 4, 0.45);
+      ctx.fill();
+    } else if (react === "success") {
+      ctx.beginPath();
+      ctx.arc(x - s * 0.2, y - s * 0.02, s * 0.1, Math.PI * 1.1, Math.PI * 1.9);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(x + s * 0.2, y - s * 0.02, s * 0.1, Math.PI * 1.1, Math.PI * 1.9);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(x, y + s * 0.12, s * 0.16, 0.2, Math.PI - 0.2);
+      ctx.stroke();
+    } else if (react === "grabbed") {
+      ctx.beginPath();
+      ctx.arc(x - s * 0.2, y - s * 0.02, s * 0.11, 0, Math.PI * 2);
+      ctx.arc(x + s * 0.2, y - s * 0.02, s * 0.11, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = "#fff";
+      ctx.beginPath();
+      ctx.arc(x - s * 0.23, y - s * 0.05, s * 0.04, 0, Math.PI * 2);
+      ctx.arc(x + s * 0.17, y - s * 0.05, s * 0.04, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = "#2a123d";
+      ctx.beginPath();
+      ctx.arc(x, y + s * 0.2, s * 0.07, 0, Math.PI * 2);
+      ctx.stroke();
+    } else if (react === "airborne") {
+      ctx.beginPath();
+      ctx.ellipse(x - s * 0.2, y - s * 0.08, s * 0.09, s * 0.07, 0, 0, Math.PI * 2);
+      ctx.ellipse(x + s * 0.2, y - s * 0.08, s * 0.09, s * 0.07, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.moveTo(x - s * 0.1, y + s * 0.2);
+      ctx.quadraticCurveTo(x, y + s * 0.08, x + s * 0.1, y + s * 0.2);
+      ctx.stroke();
+    } else {
+      const open = 0.12 + blink * 0.88;
+      ctx.beginPath();
+      ctx.ellipse(x - s * 0.2, y - s * 0.02, s * 0.09, s * 0.12 * open, 0, 0, Math.PI * 2);
+      ctx.ellipse(x + s * 0.2, y - s * 0.02, s * 0.09, s * 0.12 * open, 0, 0, Math.PI * 2);
+      ctx.fill();
+      if (open > 0.45) {
+        ctx.fillStyle = "#fff";
+        ctx.beginPath();
+        ctx.arc(x - s * 0.23, y - s * 0.06, s * 0.035, 0, Math.PI * 2);
+        ctx.arc(x + s * 0.17, y - s * 0.06, s * 0.035, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.strokeStyle = "#2a123d";
+      ctx.beginPath();
+      ctx.arc(x, y + s * 0.16, s * 0.1, 0.15, Math.PI - 0.15);
+      ctx.stroke();
+    }
   },
 
   shadow(ctx, x, y, r, lift) {
@@ -260,6 +310,7 @@ const Draw = {
   },
 
   plush(ctx, p) {
+    this._react = p.react || "idle";
     const x = p.x;
     const y = p.y;
     const r = p.radius;

@@ -74,6 +74,12 @@
           </div>
         </section>
 
+        <section class="kidbar" aria-label="부탁과 도감">
+          <div class="mission" id="missionBar">오늘의 부탁</div>
+          <div class="scraps" id="scrapBar">♥ 0</div>
+        </section>
+        <div class="dex" id="dexBar" aria-label="도감"></div>
+
         <section class="console">
           <div class="prize-head">
             <span>뽑은 인형</span>
@@ -101,7 +107,7 @@
           <li>약하게 잡히면 공중에서 미끄러져요. 거의 다 와서 떨어지기도 해요</li>
         </ol>
         <button type="button" class="primary" id="startBtn">코인 넣기</button>
-        <p class="fine">코인 8개 · 희귀 인형은 점수가 높아요</p>
+        <p class="fine" id="titleFine">코인 8개 · 오늘의 부탁을 끝내면 보너스 코인</p>
       </div>
     </div>
 
@@ -125,6 +131,7 @@
 
     <script src="vendor/matter.min.js"></script>
     <script src="js/config.js"></script>
+    <script src="js/fun.js"></script>
     <script src="js/grip.js"></script>
     <script src="js/audio.js"></script>
     <script src="js/particles.js"></script>
