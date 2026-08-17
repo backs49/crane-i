@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1"
+    />
+    <meta name="theme-color" content="#1a0b2c" />
+    <title>몰랑크레인 — Midnight Candy Catcher</title>
+    <meta
+      name="description"
+      content="탑다운 2D 물리 인형뽑기. 집게를 조준하고, 잡고, 미끄러지지 않게 데려오세요."
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Bagel+Fat+One&family=Gowun+Dodum&family=Jua&family=Nunito:wght@600;800&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="css/game.css" />
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧸</text></svg>" />
+  </head>
+  <body>
+    <div class="room">
+      <div class="glow glow-a" aria-hidden="true"></div>
+      <div class="glow glow-b" aria-hidden="true"></div>
+
+      <main class="cabinet" id="cabinet">
+        <div class="valance" aria-hidden="true"></div>
+
+        <header class="marquee">
+          <div class="bulbs" id="bulbsTop" aria-hidden="true"></div>
+          <div class="title-lockup">
+            <p class="eyebrow">오늘 밤의 유포캐처</p>
+            <h1>몰랑크레인</h1>
+            <p class="tag">MIDNIGHT CANDY CATCHER</p>
+          </div>
+          <div class="bulbs" id="bulbsBot" aria-hidden="true"></div>
+        </header>
+
+        <section class="hud" aria-label="점수판">
+          <div class="meter">
+            <span class="lbl">코인</span>
+            <span class="val" id="coinVal">8</span>
+          </div>
+          <div class="status-pill" id="statusPill">준비</div>
+          <div class="meter score">
+            <span class="lbl">점수</span>
+            <span class="val" id="scoreVal">0</span>
+          </div>
+          <button type="button" class="icon-btn" id="muteBtn" aria-label="소리 끄기" aria-pressed="false">
+            <span id="muteIcon">♪</span>
+          </button>
+        </section>
+
+        <section class="viewport" id="viewport">
+          <canvas id="game" width="840" height="1000" aria-label="인형뽑기 박스"></canvas>
+          <div class="glass" aria-hidden="true"></div>
+          <div class="toast" id="toast" hidden></div>
+
+          <div class="touch-layer" id="touchLayer">
+            <div class="joy-wrap" id="joyWrap">
+              <div class="joy-base" id="joyBase">
+                <div class="joy-knob" id="joyKnob"></div>
+              </div>
+              <span class="joy-cap">이동</span>
+            </div>
+            <button type="button" class="grab-btn" id="grabBtn">
+              <span class="gumball">
+                <span class="grab-label" id="grabLabel">집기</span>
+              </span>
+            </button>
+          </div>
+        </section>
+
+        <section class="console">
+          <div class="prize-head">
+            <span>뽑은 인형</span>
+            <span id="prizeCount">0</span>
+          </div>
+          <div class="prize-rail" id="prizeRail" aria-live="polite"></div>
+          <p class="hint" id="hint">
+            방향키 / WASD 로 집게 이동 · 스페이스로 내리고, 한 번 더 누르면 닫아요
+          </p>
+        </section>
+      </main>
+    </div>
+
+    <div class="overlay" id="titleOverlay">
+      <div class="dialog candy">
+        <p class="eyebrow">자정 캔디 오락실</p>
+        <h2>몰랑크레인</h2>
+        <p class="lead">
+          위에서 내려다보는 박스 안에서 인형들이 서로 밀리고 구릅니다.
+          집게는 일부러 힘이 약해요. 정중앙이어도 들어 올리다 미끄러질 수 있어요.
+        </p>
+        <ol class="how">
+          <li>집게를 인형 한가운데로</li>
+          <li>집기 — 바닥에 닿기 전 한 번 더 누르면 닫힘</li>
+          <li>약하게 잡히면 공중에서 미끄러져요. 거의 다 와서 떨어지기도 해요</li>
+        </ol>
+        <button type="button" class="primary" id="startBtn">코인 넣기</button>
+        <p class="fine">코인 8개 · 희귀 인형은 점수가 높아요</p>
+      </div>
+    </div>
+
+    <div class="overlay hidden" id="overOverlay">
+      <div class="dialog candy">
+        <p class="eyebrow" id="overEyebrow">코인이 떨어졌어요</p>
+        <h2 id="overTitle">게임 오버</h2>
+        <div class="over-stats">
+          <div>
+            <span>점수</span>
+            <strong id="overScore">0</strong>
+          </div>
+          <div>
+            <span>인형</span>
+            <strong id="overPrizes">0</strong>
+          </div>
+        </div>
+        <button type="button" class="primary" id="retryBtn">한 판 더</button>
+      </div>
+    </div>
+
+    <script src="vendor/matter.min.js"></script>
+    <script src="js/config.js"></script>
+    <script src="js/grip.js"></script>
+    <script src="js/audio.js"></script>
+    <script src="js/particles.js"></script>
+    <script src="js/draw.js"></script>
+    <script src="js/input.js"></script>
+    <script src="js/game.js"></script>
+  </body>
+</html>
