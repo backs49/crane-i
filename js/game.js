@@ -693,10 +693,19 @@
   }
 
   function resize() {
-    const box = canvas.getBoundingClientRect();
-    const dpr = Math.min(window.devicePixelRatio || 1, 2);
-    canvas.width = Math.max(1, Math.floor(box.width * dpr));
-    canvas.height = Math.max(1, Math.floor(box.height * dpr));
+    const host = document.getElementById("viewport") || canvas.parentElement;
+    const box = host.getBoundingClientRect();
+    let cssW = box.width;
+    let cssH = box.height;
+    if (cssW < 2 || cssH < 2) return;
+    const target = WORLD.w / WORLD.h;
+    if (cssW / cssH > target + 0.01) cssW = cssH * target;
+    else if (cssH / cssW > 1 / target + 0.01) cssH = cssW / target;
+    const dpr = Math.min(window.devicePixelRatio || 1, 3);
+    const bw = Math.max(1, Math.round(cssW * dpr));
+    const bh = Math.max(1, Math.round(cssH * dpr));
+    if (canvas.width !== bw) canvas.width = bw;
+    if (canvas.height !== bh) canvas.height = bh;
   }
 
   function worldTransform() {
@@ -810,6 +819,14 @@
   Input.init();
   resize();
   window.addEventListener("resize", resize);
+  window.addEventListener("orientationchange", () => setTimeout(resize, 200));
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener("resize", resize);
+  }
+  if (typeof ResizeObserver !== "undefined") {
+    const host = document.getElementById("viewport");
+    if (host) new ResizeObserver(resize).observe(host);
+  }
 
   document.getElementById("startBtn").addEventListener("click", startGame);
   document.getElementById("retryBtn").addEventListener("click", startGame);
