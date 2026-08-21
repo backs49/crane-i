@@ -28,7 +28,7 @@ const Input = {
       let dx = clientX - cx;
       let dy = clientY - cy;
       const mag = Math.hypot(dx, dy) || 1;
-      const max = rect.width * 0.5 - 10;
+      const max = Math.max(16, rect.width * 0.5 - knob.getBoundingClientRect().width * 0.5 - 2);
       if (mag > max) {
         dx = (dx / mag) * max;
         dy = (dy / mag) * max;

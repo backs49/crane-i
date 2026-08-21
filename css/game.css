@@ -384,11 +384,11 @@ h1 {
 
 .touch-layer {
   position: absolute;
-  inset: auto 0 10px;
+  inset: auto 0 8px;
   display: flex;
   justify-content: space-between;
   align-items: flex-end;
-  padding: 0 12px;
+  padding: 0 8px;
   pointer-events: none;
   z-index: 4;
 }
@@ -406,26 +406,26 @@ h1 {
 }
 
 .joy-base {
-  width: 118px;
-  height: 118px;
+  width: clamp(68px, 18vw, 80px);
+  height: clamp(68px, 18vw, 80px);
   border-radius: 50%;
-  background: rgba(28, 10, 44, 0.55);
-  border: 3px solid rgba(255, 234, 244, 0.35);
+  background: rgba(28, 10, 44, 0.32);
+  border: 2px solid rgba(255, 234, 244, 0.4);
   position: relative;
   touch-action: none;
-  backdrop-filter: blur(6px);
+  backdrop-filter: blur(5px);
 }
 
 .joy-knob {
-  width: 52px;
-  height: 52px;
+  width: 32px;
+  height: 32px;
   border-radius: 50%;
   background: radial-gradient(circle at 35% 30%, #ffeaf6, var(--neon-pink) 58%, #c44590);
   position: absolute;
   left: 50%;
   top: 50%;
   transform: translate(-50%, -50%);
-  box-shadow: 0 6px 0 #8a2a64;
+  box-shadow: 0 4px 0 #8a2a64;
 }
 
 .joy-cap,
@@ -441,8 +441,8 @@ h1 {
 }
 
 .gumball {
-  width: 92px;
-  height: 92px;
+  width: clamp(58px, 16vw, 68px);
+  height: clamp(58px, 16vw, 68px);
   border-radius: 50%;
   display: grid;
   place-items: center;
@@ -450,8 +450,8 @@ h1 {
     radial-gradient(circle at 30% 25%, #fff5, transparent 32%),
     radial-gradient(circle at 50% 40%, #ff9ad8, #ff4ea8 62%, #c21870);
   box-shadow:
-    0 8px 0 #8d1454,
-    0 0 0 4px rgba(255, 234, 244, 0.25);
+    0 5px 0 #8d1454,
+    0 0 0 3px rgba(255, 234, 244, 0.22);
   color: white;
 }
 
@@ -464,7 +464,7 @@ h1 {
 
 .grab-label {
   font-family: var(--display);
-  font-size: 22px;
+  font-size: 16px;
 }
 
 .console {
@@ -643,8 +643,9 @@ h1 {
   }
 
   .gumball {
-    width: 78px;
-    height: 78px;
+    width: 64px;
+    height: 64px;
+    font-size: 16px;
   }
 }
 
