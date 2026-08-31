@@ -1,0 +1,16 @@
+{
+  "name": "몰랑크레인",
+  "short_name": "몰랑크레인",
+  "description": "자정 캔디 오락실의 인형뽑기 — Midnight Candy Catcher",
+  "start_url": ".",
+  "scope": ".",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#120818",
+  "theme_color": "#1a0b2c",
+  "icons": [
+    { "src": "assets/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "assets/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "assets/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
