@@ -876,6 +876,22 @@
 
   document.getElementById("startBtn").addEventListener("click", startGame);
   document.getElementById("retryBtn").addEventListener("click", startGame);
+  document.getElementById("shareBtn").addEventListener("click", async () => {
+    const result = await Share.share({
+      score: state.score,
+      best: state.save.bestScore,
+      prizes: state.prizes,
+      dayKey: Fun.dayKey(),
+      caught: state.collection.counts,
+    });
+    const msgs = {
+      shared: "공유 완료!",
+      copied: "이미지가 복사됐어요",
+      downloaded: "이미지를 저장했어요",
+      fail: "공유에 실패했어요…",
+    };
+    toast(msgs[result] || msgs.fail, result === "fail" ? "fail" : "win");
+  });
   muteBtn.addEventListener("click", () => {
     AudioFx.unlock();
     AudioFx.setMuted(!AudioFx.muted);
@@ -952,6 +968,15 @@
       state.save = Save.defaults(TYPE_KEYS);
       Save.store(window.localStorage, state.save);
       syncKidHud();
+    },
+    shareCard() {
+      return Share.card({
+        score: state.score,
+        best: state.save.bestScore,
+        prizes: state.prizes,
+        dayKey: Fun.dayKey(),
+        caught: state.collection.counts,
+      }).toDataURL("image/png");
     },
   };
 

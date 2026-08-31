@@ -58,6 +58,7 @@ const fill = await page.evaluate(() => {
     mission: (document.getElementById("missionBar") || {}).textContent,
     scraps: (document.getElementById("scrapBar") || {}).textContent,
     dexDots: document.querySelectorAll(".dex-dot").length,
+    shareCardHead: window.__crane && window.__crane.shareCard ? window.__crane.shareCard().slice(0, 22) : null,
     snap: window.__crane ? window.__crane.snapshot() : null,
   };
 });
@@ -83,4 +84,5 @@ if (fill.width < 400 || fill.height < 400) process.exit(3);
 if (fill.ratio < 0.12) process.exit(4);
 if (fill.dexDots < 8) process.exit(5);
 if (!fill.mission || !fill.mission.includes("부탁")) process.exit(6);
+if (!fill.shareCardHead || !fill.shareCardHead.startsWith("data:image/png")) process.exit(7);
 console.log("chrome-play ok");

@@ -578,6 +578,22 @@ h1 {
   box-shadow: 0 2px 0 #c47a12;
 }
 
+.ghost {
+  width: 100%;
+  margin-top: 10px;
+  border-radius: 999px;
+  padding: 10px 18px;
+  font-family: var(--display);
+  font-size: 18px;
+  color: var(--cotton);
+  background: rgba(255, 234, 244, 0.08);
+  border: 2px solid rgba(255, 234, 244, 0.35);
+}
+
+.ghost:active {
+  transform: translateY(2px);
+}
+
 .fine {
   margin: 10px 0 0;
   font-size: 12px;
