@@ -44,6 +44,7 @@
     collection: Fun.emptyCollection(Object.keys(PLUSH_TYPES)),
     consolation: Fun.emptyConsolation(),
     streak: Fun.emptyStreak(),
+    fever: 0,
     mission: Fun.dailyMission(TYPE_KEYS, Fun.dayKey()),
     missionDone: false,
     debug: new URLSearchParams(location.search).has("debug"),
@@ -230,7 +231,8 @@
     const best = scored[0];
     const rival = scored[1];
     const crowded = !!(rival && rival.coverage > 0.28);
-    const bonus = Fun.clawBonus(state.streak) + Fun.pendingBoost(state.consolation);
+    let bonus = Fun.clawBonus(state.streak) + Fun.pendingBoost(state.consolation);
+    if (state.fever > 0) bonus += FEVER.bonus;
     state.consolation = Fun.consumeBoost(state.consolation);
     const rolled = Grip.roll({
       coverage: best.coverage,
@@ -473,7 +475,8 @@
     const remain = state.plushes.filter((p) => !p.collected);
     if (!remain.length) {
       setTimeout(() => {
-        toast("박스 클리어! 보너스 코인", "win");
+        state.fever = FEVER.grabs;
+        toast("박스 클리어! 피버 타임 + 코인 2개", "win");
         state.coins += 2;
         coinEl.textContent = String(state.coins);
         fillBox(SPAWN_BAG);
@@ -521,6 +524,7 @@
       return;
     }
     state.coins -= 1;
+    if (state.fever > 0) state.fever -= 1;
     coinEl.textContent = String(state.coins);
     AudioFx.grab();
     setMode("descending");
@@ -560,6 +564,7 @@
       state.collection = Fun.emptyCollection(TYPE_KEYS);
       state.consolation = Fun.emptyConsolation();
       state.streak = Fun.emptyStreak();
+      state.fever = 0;
       state.mission = Fun.dailyMission(TYPE_KEYS, Fun.dayKey());
       state.missionDone = !!state.save.daily.missionDone;
     }
@@ -810,7 +815,7 @@
 
     if (state.mode === "aiming" || state.mode === "title") {
       ctx.save();
-      ctx.strokeStyle = "rgba(255, 227, 106, 0.35)";
+      ctx.strokeStyle = state.fever > 0 ? "rgba(255, 196, 77, 0.85)" : "rgba(255, 227, 106, 0.35)";
       ctx.setLineDash([4, 4]);
       ctx.lineWidth = 1.6;
       ctx.beginPath();
@@ -916,6 +921,7 @@
         },
         consolation: { scraps: state.consolation.scraps, boost: Fun.pendingBoost(state.consolation) },
         streak: state.streak,
+        fever: state.fever,
         pityAt: Grip.PITY_AT,
         mission: {
           type: state.mission.type,
