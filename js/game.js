@@ -17,6 +17,7 @@
   const scrapBar = document.getElementById("scrapBar");
   const dexBar = document.getElementById("dexBar");
   const TYPE_KEYS = Object.keys(PLUSH_TYPES);
+  const BASE_TYPE_KEYS = TYPE_KEYS.filter((k) => PLUSH_TYPES[k].rarity !== "secret");
 
   const engine = Engine.create({
     enableSleeping: true,
@@ -45,7 +46,7 @@
     consolation: Fun.emptyConsolation(),
     streak: Fun.emptyStreak(),
     fever: 0,
-    mission: Fun.dailyMission(TYPE_KEYS, Fun.dayKey()),
+    mission: Fun.dailyMission(BASE_TYPE_KEYS, Fun.dayKey()),
     missionDone: false,
     debug: new URLSearchParams(location.search).has("debug"),
   };
@@ -148,7 +149,8 @@
 
   function fillBox(bag) {
     const born = [];
-    for (const type of bag) {
+    const full = state.save.moonUnlocked ? bag.concat(["moonbunny", "moonbunny"]) : bag;
+    for (const type of full) {
       const p = createPlush(type, spawnPos());
       state.plushes.push(p);
       born.push(p);
@@ -367,10 +369,12 @@
     dexBar.innerHTML = "";
     for (const type of TYPE_KEYS) {
       const dot = document.createElement("span");
+      const spec = PLUSH_TYPES[type];
       const n = state.save.dexCounts[type] || 0;
-      dot.className = "dex-dot" + (n ? " on" : "");
-      dot.style.setProperty("--c", PLUSH_TYPES[type].color);
-      dot.title = `${PLUSH_TYPES[type].name} ${n}`;
+      const hidden = spec.rarity === "secret" && !n;
+      dot.className = "dex-dot" + (n ? " on" : "") + (hidden ? " secret" : "");
+      dot.style.setProperty("--c", spec.color);
+      dot.title = hidden ? "???" : `${spec.name} ${n}`;
       dexBar.appendChild(dot);
     }
   }
@@ -465,6 +469,11 @@
         coinEl.textContent = String(state.coins);
         msg = `부탁 성공! 코인 +2`;
       }
+    }
+    if (!state.save.moonUnlocked && Save.dexComplete(state.save, BASE_TYPE_KEYS)) {
+      state.save = Save.unlockMoon(state.save);
+      msg = "도감 완성! 달토끼가 찾아와요";
+      Particles.emit(CHUTE.x, CHUTE.y, "gold", 60);
     }
     Save.store(window.localStorage, state.save);
     toast(msg, "win");
@@ -565,7 +574,7 @@
       state.consolation = Fun.emptyConsolation();
       state.streak = Fun.emptyStreak();
       state.fever = 0;
-      state.mission = Fun.dailyMission(TYPE_KEYS, Fun.dayKey());
+      state.mission = Fun.dailyMission(BASE_TYPE_KEYS, Fun.dayKey());
       state.missionDone = !!state.save.daily.missionDone;
     }
     coinEl.textContent = String(state.coins);
@@ -950,6 +959,7 @@
           totalPrizes: state.save.totalPrizes,
           totalPlays: state.save.totalPlays,
           dexUnique: Save.dexUnique(state.save),
+          moonUnlocked: state.save.moonUnlocked,
         },
       };
     },

@@ -320,6 +320,11 @@ h1 {
   border-color: rgba(255, 255, 255, 0.45);
 }
 
+.dex-dot.secret {
+  border-style: dashed;
+  border-color: var(--neon-lemon);
+}
+
 .viewport {
   --play-h: min(58dvh, calc(100dvh - 280px));
   margin: 0 auto;
