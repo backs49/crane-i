@@ -2,22 +2,25 @@ const Particles = {
   list: [],
 
   emit(x, y, kind, count) {
+    const lively = kind === "win" || kind === "gold";
     const palette =
-      kind === "win"
-        ? ["#ff79c7", "#63f0c8", "#ffe36a", "#cbb6ff", "#fff7fb"]
-        : kind === "slip"
-          ? ["#c9b6c4", "#8a709c", "#ffeaf4"]
-          : ["#ffe36a", "#ff79c7", "#fff7fb"];
+      kind === "gold"
+        ? ["#ffe36a", "#ffc44d", "#fff7fb", "#ffb347"]
+        : kind === "win"
+          ? ["#ff79c7", "#63f0c8", "#ffe36a", "#cbb6ff", "#fff7fb"]
+          : kind === "slip"
+            ? ["#c9b6c4", "#8a709c", "#ffeaf4"]
+            : ["#ffe36a", "#ff79c7", "#fff7fb"];
 
     for (let i = 0; i < count; i++) {
       const a = Math.random() * Math.PI * 2;
-      const s = kind === "win" ? 70 + Math.random() * 160 : 40 + Math.random() * 90;
-      const shapes = kind === "win" ? ["star", "heart", "circle", "petal"] : ["circle", "puff"];
+      const s = lively ? 70 + Math.random() * 160 : 40 + Math.random() * 90;
+      const shapes = lively ? ["star", "heart", "circle", "petal"] : ["circle", "puff"];
       this.list.push({
         x,
         y,
         vx: Math.cos(a) * s,
-        vy: Math.sin(a) * s - (kind === "win" ? 40 : 10),
+        vy: Math.sin(a) * s - (lively ? 40 : 10),
         life: 0,
         max: 0.55 + Math.random() * 0.55,
         size: 3 + Math.random() * 6,

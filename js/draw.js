@@ -322,6 +322,19 @@ const Draw = {
 
     this.shadow(ctx, x, y, r, lift);
 
+    if (p.golden) {
+      ctx.save();
+      ctx.translate(x, y);
+      const halo = ctx.createRadialGradient(0, 0, r * 0.4, 0, 0, r * 1.6);
+      halo.addColorStop(0, "rgba(255, 227, 106, 0.4)");
+      halo.addColorStop(1, "rgba(255, 227, 106, 0)");
+      ctx.fillStyle = halo;
+      ctx.beginPath();
+      ctx.arc(0, 0, r * 1.6, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+
     ctx.save();
     ctx.translate(x, y);
     ctx.rotate(ang);
@@ -345,6 +358,22 @@ const Draw = {
     else this.felt(ctx, 0, 2, r * 0.92, r * 0.86, c);
 
     ctx.restore();
+
+    if (p.golden) {
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.strokeStyle = "rgba(255, 200, 60, 0.85)";
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.arc(0, 0, r * scale + 4, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.fillStyle = "#ffe36a";
+      this.star(ctx, -r * 0.9, -r * 0.95, 4.5, 4, 0.45);
+      ctx.fill();
+      this.star(ctx, r * 0.95, -r * 0.55, 3.5, 4, 0.45);
+      ctx.fill();
+      ctx.restore();
+    }
   },
 
   bear(ctx, r, c, blink) {

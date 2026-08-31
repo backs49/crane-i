@@ -139,16 +139,25 @@
       squashX: 0,
       squashY: 0,
       collected: false,
+      golden: false,
       react: "idle",
       reactT: 0,
     };
   }
 
   function fillBox(bag) {
+    const born = [];
     for (const type of bag) {
       const p = createPlush(type, spawnPos());
       state.plushes.push(p);
+      born.push(p);
       Composite.add(engine.world, p.body);
+    }
+    const gi = Fun.pickGoldenIndex(born.length, GOLDEN.chance);
+    if (gi >= 0) {
+      born[gi].golden = true;
+      born[gi].points = born[gi].points * GOLDEN.mult;
+      if (state.mode !== "title") toast("황금 인형 등장!", "win");
     }
     for (let i = 0; i < 120; i++) Engine.update(engine, 1000 / 60);
   }
@@ -443,8 +452,8 @@
     prizeCount.textContent = String(state.prizes);
     AudioFx.win();
     const juice = Math.round(42 * Fun.juiceScale(state.streak));
-    Particles.emit(CHUTE.x, CHUTE.y, "win", juice);
-    let msg = `${plush.name} +${plush.points}`;
+    Particles.emit(CHUTE.x, CHUTE.y, plush.golden ? "gold" : "win", juice);
+    let msg = plush.golden ? `황금 ${plush.name} +${plush.points}` : `${plush.name} +${plush.points}`;
     if (!state.missionDone && plush.type === state.mission.type) {
       state.save = Save.noteMissionCatch(state.save);
       if (state.save.daily.missionCount >= state.mission.need) {
@@ -457,7 +466,7 @@
     }
     Save.store(window.localStorage, state.save);
     toast(msg, "win");
-    addPrizeChip(plush.type);
+    addPrizeChip(plush);
     syncKidHud();
     if (navigator.vibrate) navigator.vibrate(28);
 
@@ -472,13 +481,13 @@
     }
   }
 
-  function addPrizeChip(type) {
+  function addPrizeChip(plush) {
     const c = document.createElement("canvas");
     c.width = 96;
     c.height = 96;
     const cctx = c.getContext("2d");
     cctx.scale(2, 2);
-    Draw.plush(cctx, { type, x: 24, y: 28, radius: 14, angle: -0.12, liftZ: 0, blink: 1, react: "success" });
+    Draw.plush(cctx, { type: plush.type, golden: plush.golden, x: 24, y: 28, radius: 14, angle: -0.12, liftZ: 0, blink: 1, react: "success" });
     prizeRail.appendChild(c);
   }
 
@@ -765,6 +774,7 @@
     for (const p of floor) {
       Draw.plush(ctx, {
         type: p.type,
+        golden: p.golden,
         x: p.body.position.x + (p.slipX || 0),
         y: p.body.position.y + (p.slipY || 0),
         radius: p.radius,
@@ -782,6 +792,7 @@
     for (const p of air) {
       Draw.plush(ctx, {
         type: p.type,
+        golden: p.golden,
         x: p.body.position.x + (p.slipX || 0),
         y: p.body.position.y + (p.slipY || 0),
         radius: p.radius,
@@ -891,6 +902,7 @@
         prizes: state.prizes,
         plushes: state.plushes.filter((p) => !p.collected).map((p) => ({
           type: p.type,
+          golden: !!p.golden,
           x: p.body.position.x,
           y: p.body.position.y,
           r: p.radius,
