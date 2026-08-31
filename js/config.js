@@ -40,6 +40,9 @@ const PLUSH_TYPES = {
   star: { name: "별뭉치", points: 260, radius: 23, mass: 0.86, color: "#ffe36a", rarity: "rare" },
 };
 
+const GOLDEN = { chance: 0.18, mult: 3 };
+const FEVER = { grabs: 3, bonus: 0.1 };
+
 const SPAWN_BAG = [
   "bear",
   "bear",

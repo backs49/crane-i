@@ -136,4 +136,15 @@ function collection() {
   assert.strictEqual(withoutPity.kind, withZeroPity.kind);
 }
 
+{
+  assert.strictEqual(Fun.pickGoldenIndex(10, 0.18, () => 0.9), -1);
+  const seq2 = [0.1, 0.5];
+  let j = 0;
+  const rngG = () => seq2[j++];
+  assert.strictEqual(Fun.pickGoldenIndex(10, 0.18, rngG), 5);
+  assert.strictEqual(Fun.pickGoldenIndex(0, 1, () => 0), -1);
+  const idx = Fun.pickGoldenIndex(7, 1, Math.random);
+  assert.ok(idx >= 0 && idx < 7);
+}
+
 console.log("fun.test.js ok");
