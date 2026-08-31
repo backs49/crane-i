@@ -62,7 +62,8 @@ const Share = {
 
     ctx.fillStyle = "#63f0c8";
     ctx.font = "24px 'Gowun Dodum', sans-serif";
-    const bestLine = info.score >= info.best && info.score > 0 ? "오늘 최고 기록 갱신!" : `최고 기록 ${info.best}점`;
+    const isBest = typeof info.isBest === "boolean" ? info.isBest : (info.score >= info.best && info.score > 0);
+    const bestLine = isBest ? "오늘 최고 기록 갱신!" : `최고 기록 ${info.best}점`;
     ctx.fillText(bestLine, this.W / 2, 440);
 
     const types = Object.keys(info.caught || {}).filter((t) => info.caught[t] > 0 && PLUSH_TYPES[t]);
@@ -81,7 +82,7 @@ const Share = {
         const row = Math.floor(i / cols);
         const px = startX + col * cellW;
         const py = 560 + row * 160;
-        Draw.plush(ctx, { type, x: px, y: py, radius: 44, angle: 0, liftZ: 0, blink: 1, react: "success" });
+        Draw.plush(ctx, { type, golden: !!(info.golden && info.golden[type]), x: px, y: py, radius: 44, angle: 0, liftZ: 0, blink: 1, react: "success" });
         ctx.fillStyle = "#ffeaf4";
         ctx.font = "22px 'Gowun Dodum', sans-serif";
         ctx.fillText(`×${info.caught[type]}`, px, py + 84);
@@ -106,8 +107,9 @@ const Share = {
         try {
           await navigator.share({ files: [file], title: "몰랑크레인", text });
           return "shared";
-        } catch (_) {
-          /* 사용자가 취소했거나 미지원 — 다음 폴백으로 */
+        } catch (err) {
+          if (err && err.name === "AbortError") return "cancelled";
+          /* 미지원 등 그 외 오류 — 다음 폴백으로 */
         }
       }
     }

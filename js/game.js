@@ -18,6 +18,7 @@
   const dexBar = document.getElementById("dexBar");
   const TYPE_KEYS = Object.keys(PLUSH_TYPES);
   const BASE_TYPE_KEYS = TYPE_KEYS.filter((k) => PLUSH_TYPES[k].rarity !== "secret");
+  const storage = (() => { try { return window.localStorage; } catch (_) { return null; } })();
 
   const engine = Engine.create({
     enableSleeping: true,
@@ -41,13 +42,15 @@
     returnDist: 0,
     lastGrip: null,
     strainTimer: 0,
-    save: Save.touchDaily(Save.load(window.localStorage, TYPE_KEYS), Fun.dayKey()).data,
+    save: Save.touchDaily(Save.load(storage, TYPE_KEYS), Fun.dayKey()).data,
     collection: Fun.emptyCollection(Object.keys(PLUSH_TYPES)),
     consolation: Fun.emptyConsolation(),
     streak: Fun.emptyStreak(),
     fever: 0,
     mission: Fun.dailyMission(BASE_TYPE_KEYS, Fun.dayKey()),
     missionDone: false,
+    lastBest: false,
+    goldenCaught: Object.create(null),
     debug: new URLSearchParams(location.search).has("debug"),
   };
 
@@ -148,6 +151,7 @@
   }
 
   function fillBox(bag) {
+    state.plushes = state.plushes.filter((p) => !p.collected);
     const born = [];
     const full = state.save.moonUnlocked ? bag.concat(["moonbunny", "moonbunny"]) : bag;
     for (const type of full) {
@@ -160,7 +164,11 @@
     if (gi >= 0) {
       born[gi].golden = true;
       born[gi].points = born[gi].points * GOLDEN.mult;
-      if (state.mode !== "title") toast("황금 인형 등장!", "win");
+      if (state.mode !== "title") {
+        setTimeout(() => {
+          if (state.mode !== "title" && state.mode !== "gameover") toast("황금 인형 등장!", "win");
+        }, 1400);
+      }
     }
     for (let i = 0; i < 120; i++) Engine.update(engine, 1000 / 60);
   }
@@ -235,7 +243,6 @@
     const crowded = !!(rival && rival.coverage > 0.28);
     let bonus = Fun.clawBonus(state.streak) + Fun.pendingBoost(state.consolation);
     if (state.fever > 0) bonus += FEVER.bonus;
-    state.consolation = Fun.consumeBoost(state.consolation);
     const rolled = Grip.roll({
       coverage: best.coverage,
       crowded,
@@ -246,6 +253,7 @@
       bonus,
       pity: state.streak.slips,
     });
+    if (!rolled.pity) state.consolation = Fun.consumeBoost(state.consolation);
     if (rolled.kind === "miss") return [];
 
     return [
@@ -283,6 +291,7 @@
           coverage: found[0].coverage,
           slipAt: found[0].slipAt,
           location: found[0].location,
+          pity: !!found[0].pity,
         }
       : { kind: "miss" };
     if (state.grips.length) {
@@ -294,6 +303,7 @@
     } else {
       toast("허공이야", "fail");
     }
+    if (state.fever > 0) state.fever -= 1;
   }
 
   function detachGrips(dropped) {
@@ -443,8 +453,18 @@
     return d < CHUTE.r + 4;
   }
 
+  function ensureToday() {
+    const today = Fun.dayKey();
+    if (state.save.daily.date === today) return;
+    state.save = Save.touchDaily(state.save, today).data;
+    state.mission = Fun.dailyMission(BASE_TYPE_KEYS, today);
+    state.missionDone = !!state.save.daily.missionDone;
+    syncKidHud();
+  }
+
   function collect(plush) {
     if (plush.collected) return;
+    ensureToday();
     plush.collected = true;
     plush.react = "success";
     Composite.remove(engine.world, plush.body);
@@ -452,7 +472,7 @@
     state.prizes += 1;
     state.collection = Fun.recordCatch(state.collection, plush.type);
     state.save = Save.recordCatch(state.save, plush.type);
-    Save.store(window.localStorage, state.save);
+    if (plush.golden) state.goldenCaught[plush.type] = (state.goldenCaught[plush.type] || 0) + 1;
     state.streak = Fun.noteCatch(state.streak);
     scoreEl.textContent = String(state.score);
     prizeCount.textContent = String(state.prizes);
@@ -475,7 +495,7 @@
       msg = "도감 완성! 달토끼가 찾아와요";
       Particles.emit(CHUTE.x, CHUTE.y, "gold", 60);
     }
-    Save.store(window.localStorage, state.save);
+    Save.store(storage, state.save);
     toast(msg, "win");
     addPrizeChip(plush);
     syncKidHud();
@@ -484,6 +504,7 @@
     const remain = state.plushes.filter((p) => !p.collected);
     if (!remain.length) {
       setTimeout(() => {
+        if (state.mode === "gameover" || state.mode === "title") return;
         state.fever = FEVER.grabs;
         toast("박스 클리어! 피버 타임 + 코인 2개", "win");
         state.coins += 2;
@@ -533,7 +554,6 @@
       return;
     }
     state.coins -= 1;
-    if (state.fever > 0) state.fever -= 1;
     coinEl.textContent = String(state.coins);
     AudioFx.grab();
     setMode("descending");
@@ -544,8 +564,9 @@
     setMode("gameover");
     AudioFx.over();
     const res = Save.recordGameOver(state.save, state.score);
+    state.lastBest = res.isBest;
     state.save = res.data;
-    Save.store(window.localStorage, state.save);
+    Save.store(storage, state.save);
     document.getElementById("overScore").textContent = String(state.score);
     document.getElementById("overPrizes").textContent = String(state.prizes);
     document.getElementById("overBest").textContent = String(state.save.bestScore);
@@ -574,6 +595,7 @@
       state.consolation = Fun.emptyConsolation();
       state.streak = Fun.emptyStreak();
       state.fever = 0;
+      state.goldenCaught = Object.create(null);
       state.mission = Fun.dailyMission(BASE_TYPE_KEYS, Fun.dayKey());
       state.missionDone = !!state.save.daily.missionDone;
     }
@@ -603,7 +625,7 @@
       coinEl.textContent = String(state.coins);
       bonusToast = "오늘의 첫 코인! +2";
     }
-    Save.store(window.localStorage, state.save);
+    Save.store(storage, state.save);
     state.ignoreGrab = 0.35;
     syncKidHud();
     setMode("aiming");
@@ -885,21 +907,31 @@
 
   document.getElementById("startBtn").addEventListener("click", startGame);
   document.getElementById("retryBtn").addEventListener("click", startGame);
+  let sharing = false;
   document.getElementById("shareBtn").addEventListener("click", async () => {
-    const result = await Share.share({
-      score: state.score,
-      best: state.save.bestScore,
-      prizes: state.prizes,
-      dayKey: Fun.dayKey(),
-      caught: state.collection.counts,
-    });
-    const msgs = {
-      shared: "공유 완료!",
-      copied: "이미지가 복사됐어요",
-      downloaded: "이미지를 저장했어요",
-      fail: "공유에 실패했어요…",
-    };
-    toast(msgs[result] || msgs.fail, result === "fail" ? "fail" : "win");
+    if (sharing) return;
+    sharing = true;
+    try {
+      const result = await Share.share({
+        score: state.score,
+        best: state.save.bestScore,
+        prizes: state.prizes,
+        dayKey: Fun.dayKey(),
+        caught: state.collection.counts,
+        isBest: state.lastBest,
+        golden: state.goldenCaught,
+      });
+      if (result === "cancelled") return;
+      const msgs = {
+        shared: "공유 완료!",
+        copied: "이미지가 복사됐어요",
+        downloaded: "이미지를 저장했어요",
+        fail: "공유에 실패했어요…",
+      };
+      toast(msgs[result] || msgs.fail, result === "fail" ? "fail" : "win");
+    } finally {
+      sharing = false;
+    }
   });
   muteBtn.addEventListener("click", () => {
     AudioFx.unlock();
@@ -975,8 +1007,11 @@
     },
     end: endGame,
     wipeSave() {
-      state.save = Save.defaults(TYPE_KEYS);
-      Save.store(window.localStorage, state.save);
+      Save.wipe(storage);
+      state.save = Save.touchDaily(Save.defaults(TYPE_KEYS), Fun.dayKey()).data;
+      state.missionDone = false;
+      state.mission = Fun.dailyMission(BASE_TYPE_KEYS, Fun.dayKey());
+      Save.store(storage, state.save);
       syncKidHud();
     },
     shareCard() {
@@ -986,6 +1021,8 @@
         prizes: state.prizes,
         dayKey: Fun.dayKey(),
         caught: state.collection.counts,
+        isBest: state.lastBest,
+        golden: state.goldenCaught,
       }).toDataURL("image/png");
     },
   };
