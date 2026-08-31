@@ -355,6 +355,7 @@ const Draw = {
     else if (type === "berry") this.berry(ctx, r, c, blink);
     else if (type === "unicorn") this.unicorn(ctx, r, c, blink);
     else if (type === "star") this.starPlush(ctx, r, c, blink);
+    else if (type === "moonbunny") this.moonbunny(ctx, r, c, blink);
     else this.felt(ctx, 0, 2, r * 0.92, r * 0.86, c);
 
     ctx.restore();
@@ -563,5 +564,20 @@ const Draw = {
     ctx.fill();
     ctx.stroke();
     this.face(ctx, 0, r * 0.06, r * 0.58, blink);
+  },
+
+  moonbunny(ctx, r, c, blink) {
+    this.felt(ctx, -r * 0.38, -r * 0.95, r * 0.22, r * 0.52, c);
+    this.felt(ctx, r * 0.38, -r * 0.95, r * 0.22, r * 0.52, c);
+    this.felt(ctx, -r * 0.38, -r * 0.92, r * 0.1, r * 0.34, "#cbb6ff");
+    this.felt(ctx, r * 0.38, -r * 0.92, r * 0.1, r * 0.34, "#cbb6ff");
+    this.felt(ctx, 0, r * 0.22, r * 0.72, r * 0.64, c);
+    this.felt(ctx, 0, -r * 0.1, r * 0.8, r * 0.72, c);
+    ctx.fillStyle = "#ffe36a";
+    ctx.beginPath();
+    ctx.arc(0, r * 0.28, r * 0.2, 0, Math.PI * 2);
+    ctx.arc(r * 0.09, r * 0.24, r * 0.15, 0, Math.PI * 2, true);
+    ctx.fill("evenodd");
+    this.face(ctx, 0, -r * 0.06, r * 0.68, blink);
   },
 };

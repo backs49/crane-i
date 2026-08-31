@@ -38,6 +38,7 @@ const PLUSH_TYPES = {
   berry: { name: "딸기", points: 200, radius: 22, mass: 0.88, color: "#ff6b8a", rarity: "rare" },
   unicorn: { name: "유니콘", points: 320, radius: 27, mass: 1.18, color: "#d7c2ff", rarity: "rare" },
   star: { name: "별뭉치", points: 260, radius: 23, mass: 0.86, color: "#ffe36a", rarity: "rare" },
+  moonbunny: { name: "달토끼", points: 400, radius: 25, mass: 1.0, color: "#e8e6ff", rarity: "secret" },
 };
 
 const GOLDEN = { chance: 0.18, mult: 3 };
