@@ -114,4 +114,26 @@ function collection() {
   assert.ok(m1.need === 1 || m1.need === 2);
 }
 
+{
+  const base = { coverage: 0.6, crowded: false, radius: 24, points: 100, x: 210, y: 200 };
+  const alwaysLose = () => 0.999;
+  assert.strictEqual(Grip.PITY_AT, 4);
+  assert.notStrictEqual(Grip.roll({ ...base, pity: 0 }, alwaysLose).kind, "hold");
+  assert.notStrictEqual(Grip.roll({ ...base, pity: 3 }, alwaysLose).kind, "hold");
+  const saved = Grip.roll({ ...base, pity: 4 }, alwaysLose);
+  assert.strictEqual(saved.kind, "hold");
+  assert.strictEqual(saved.pity, true);
+  assert.strictEqual(Grip.roll({ ...base, pity: 9 }, alwaysLose).kind, "hold");
+  assert.notStrictEqual(Grip.roll({ ...base, coverage: 0.25, pity: 9 }, alwaysLose).kind, "hold");
+  assert.strictEqual(Grip.roll({ ...base, coverage: 0.1, pity: 9 }, alwaysLose).kind, "miss");
+  const seq = [0.5, 0.5, 0.5];
+  let i = 0;
+  const rngA = () => seq[i++ % seq.length];
+  i = 0;
+  const withoutPity = Grip.roll({ ...base }, rngA);
+  i = 0;
+  const withZeroPity = Grip.roll({ ...base, pity: 0 }, rngA);
+  assert.strictEqual(withoutPity.kind, withZeroPity.kind);
+}
+
 console.log("fun.test.js ok");

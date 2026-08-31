@@ -1,4 +1,6 @@
 const Grip = {
+  PITY_AT: 4,
+
   coverage(dist, radius) {
     return Math.max(0, Math.min(1, (16 + radius * 0.55 - dist) / (radius * 0.95)));
   },
@@ -56,6 +58,19 @@ const Grip = {
         fingerGap: 0,
         stiffness: 0,
         stretch: 0,
+        location: loc,
+      };
+    }
+
+    if ((opts.pity || 0) >= this.PITY_AT && coverage >= 0.3) {
+      return {
+        kind: "hold",
+        pity: true,
+        slipAt: 1.2,
+        wobble: 0.55,
+        fingerGap: 0.05,
+        stiffness: 0.028,
+        stretch: 26,
         location: loc,
       };
     }
