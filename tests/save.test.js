@@ -68,4 +68,34 @@ const TYPES = ["bear", "bunny", "unicorn"];
   assert.strictEqual(Save.load(mem, TYPES).dexCounts.bear, 1);
 }
 
+{
+  const d = Save.defaults(TYPES);
+  assert.strictEqual(d.daily.date, "");
+  assert.strictEqual(d.daily.missionCount, 0);
+  const t1 = Save.touchDaily(d, "2026-08-31");
+  assert.strictEqual(t1.isNewDay, true);
+  assert.strictEqual(t1.data.daily.date, "2026-08-31");
+  let cur = Save.grantLogin(t1.data);
+  assert.strictEqual(cur.daily.loginBonus, true);
+  cur = Save.noteMissionCatch(cur);
+  cur = Save.noteMissionCatch(cur);
+  assert.strictEqual(cur.daily.missionCount, 2);
+  cur = Save.completeMission(cur);
+  assert.strictEqual(cur.daily.missionDone, true);
+  const same = Save.touchDaily(cur, "2026-08-31");
+  assert.strictEqual(same.isNewDay, false);
+  assert.strictEqual(same.data.daily.missionCount, 2);
+  assert.strictEqual(same.data.daily.loginBonus, true);
+  const next = Save.touchDaily(cur, "2026-09-01");
+  assert.strictEqual(next.isNewDay, true);
+  assert.strictEqual(next.data.daily.missionCount, 0);
+  assert.strictEqual(next.data.daily.missionDone, false);
+  assert.strictEqual(next.data.daily.loginBonus, false);
+  const mem = { data: null, setItem(k, v) { this.data = v; }, getItem() { return this.data; } };
+  Save.store(mem, cur);
+  const back = Save.load(mem, TYPES);
+  assert.strictEqual(back.daily.date, "2026-08-31");
+  assert.strictEqual(back.daily.missionDone, true);
+}
+
 console.log("save.test.js ok");

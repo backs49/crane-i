@@ -1,10 +1,33 @@
 const Save = {
   KEY: "molang-crane:v1",
 
+  emptyDaily(dayKey) {
+    return { date: dayKey || "", missionCount: 0, missionDone: false, loginBonus: false };
+  },
+
+  touchDaily(data, dayKey) {
+    const isNewDay = !data.daily || data.daily.date !== dayKey;
+    const daily = isNewDay ? this.emptyDaily(dayKey) : data.daily;
+    return { data: Object.assign({}, data, { daily }), isNewDay };
+  },
+
+  noteMissionCatch(data) {
+    const daily = Object.assign({}, data.daily, { missionCount: (data.daily.missionCount || 0) + 1 });
+    return Object.assign({}, data, { daily });
+  },
+
+  completeMission(data) {
+    return Object.assign({}, data, { daily: Object.assign({}, data.daily, { missionDone: true }) });
+  },
+
+  grantLogin(data) {
+    return Object.assign({}, data, { daily: Object.assign({}, data.daily, { loginBonus: true }) });
+  },
+
   defaults(typeKeys) {
     const dexCounts = Object.create(null);
     for (const t of typeKeys) dexCounts[t] = 0;
-    return { v: 1, bestScore: 0, totalPrizes: 0, totalPlays: 0, dexCounts };
+    return { v: 1, bestScore: 0, totalPrizes: 0, totalPlays: 0, dexCounts, daily: this.emptyDaily("") };
   },
 
   normalize(raw, typeKeys) {
@@ -19,6 +42,15 @@ const Save = {
     out.dexCounts = Object.assign(Object.create(null), base.dexCounts);
     if (raw.dexCounts && typeof raw.dexCounts === "object") {
       for (const t of typeKeys) out.dexCounts[t] = num(raw.dexCounts[t]);
+    }
+    out.daily = this.emptyDaily("");
+    if (raw.daily && typeof raw.daily === "object") {
+      out.daily = {
+        date: typeof raw.daily.date === "string" ? raw.daily.date : "",
+        missionCount: num(raw.daily.missionCount),
+        missionDone: !!raw.daily.missionDone,
+        loginBonus: !!raw.daily.loginBonus,
+      };
     }
     return out;
   },
