@@ -231,6 +231,7 @@
       x: claw.x,
       y: claw.y,
       bonus,
+      pity: state.streak.slips,
     });
     if (rolled.kind === "miss") return [];
 
@@ -273,7 +274,8 @@
       : { kind: "miss" };
     if (state.grips.length) {
       const kind = state.grips[0].kind;
-      if (kind === "hold") toast("잡았다…?", "");
+      if (state.grips[0].pity) toast("집게가 힘을 냈어!", "win");
+      else if (kind === "hold") toast("잡았다…?", "");
       else if (kind === "late") toast("흔들려…", "");
       else toast("힘이 약해…", "fail");
     } else {
@@ -902,6 +904,7 @@
         },
         consolation: { scraps: state.consolation.scraps, boost: Fun.pendingBoost(state.consolation) },
         streak: state.streak,
+        pityAt: Grip.PITY_AT,
         mission: {
           type: state.mission.type,
           need: state.mission.need,
