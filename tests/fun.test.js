@@ -97,4 +97,21 @@ function collection() {
   assert.ok(boosted - plain <= bonus + 1e-9);
 }
 
+{
+  assert.strictEqual(Fun.dayKey(new Date(2026, 7, 31)), "2026-08-31");
+  assert.strictEqual(Fun.dayKey(new Date(2026, 0, 5)), "2026-01-05");
+  const r1 = Fun.seededRng("mission:2026-08-31");
+  const r2 = Fun.seededRng("mission:2026-08-31");
+  for (let i = 0; i < 5; i++) assert.strictEqual(r1(), r2());
+  const v = Fun.seededRng("a")();
+  assert.ok(v >= 0 && v < 1);
+  assert.notStrictEqual(Fun.seededRng("a")(), Fun.seededRng("b")());
+  const keys = ["bear", "bunny", "unicorn"];
+  const m1 = Fun.dailyMission(keys, "2026-08-31");
+  const m2 = Fun.dailyMission(keys, "2026-08-31");
+  assert.deepStrictEqual(m1, m2);
+  assert.ok(keys.includes(m1.type));
+  assert.ok(m1.need === 1 || m1.need === 2);
+}
+
 console.log("fun.test.js ok");
