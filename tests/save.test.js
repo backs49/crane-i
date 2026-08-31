@@ -117,4 +117,82 @@ const TYPES = ["bear", "bunny", "unicorn"];
   assert.strictEqual(Save.load(legacy, TYPES).moonUnlocked, false);
 }
 
+{
+  const a = Object.assign({}, Save.defaults(TYPES), {
+    bestScore: 300,
+    totalPrizes: 5,
+    totalPlays: 8,
+    dexCounts: Object.assign(Object.create(null), { bear: 3, bunny: 0, unicorn: 1 }),
+    daily: { date: "2026-08-30", missionCount: 4, missionDone: true, loginBonus: false },
+    moonUnlocked: true,
+  });
+  const b = Object.assign({}, Save.defaults(TYPES), {
+    bestScore: 200,
+    totalPrizes: 9,
+    totalPlays: 2,
+    dexCounts: Object.assign(Object.create(null), { bear: 1, bunny: 2, unicorn: 0 }),
+    daily: { date: "2026-08-31", missionCount: 1, missionDone: false, loginBonus: true },
+    moonUnlocked: false,
+  });
+  const m = Save.merge(a, b);
+  assert.strictEqual(m.bestScore, 300);
+  assert.strictEqual(m.totalPrizes, 9);
+  assert.strictEqual(m.totalPlays, 8);
+  assert.strictEqual(m.dexCounts.bear, 3);
+  assert.strictEqual(m.dexCounts.bunny, 2);
+  assert.strictEqual(m.dexCounts.unicorn, 1);
+  assert.strictEqual(m.moonUnlocked, true);
+  assert.strictEqual(m.daily.date, "2026-08-31");
+  assert.strictEqual(m.daily.missionCount, 1);
+  assert.strictEqual(m.daily.missionDone, false);
+  assert.strictEqual(m.daily.loginBonus, true);
+  assert.notStrictEqual(m, a);
+  assert.notStrictEqual(m, b);
+  assert.strictEqual(a.bestScore, 300);
+  assert.strictEqual(b.daily.missionCount, 1);
+  const sameDay = Object.assign({}, a, {
+    daily: { date: "2026-08-31", missionCount: 4, missionDone: true, loginBonus: false },
+  });
+  const m2 = Save.merge(sameDay, b);
+  assert.strictEqual(m2.daily.date, "2026-08-31");
+  assert.strictEqual(m2.daily.missionCount, 4);
+  assert.strictEqual(m2.daily.missionDone, true);
+  assert.strictEqual(m2.daily.loginBonus, true);
+}
+
+{
+  const mem = { data: null, setItem(k, v) { this.data = v; }, getItem() { return this.data; } };
+  let a = Save.recordCatch(Save.defaults(TYPES), "bear");
+  a = Save.recordGameOver(a, 400).data;
+  Save.store(mem, a);
+  const b = Save.recordGameOver(Save.defaults(TYPES), 100).data;
+  Save.store(mem, b);
+  const loaded = Save.load(mem, TYPES);
+  assert.strictEqual(loaded.bestScore, 400);
+  assert.strictEqual(loaded.dexCounts.bear, 1);
+}
+
+{
+  const mem = {
+    data: null,
+    setItem(k, v) { this.data = v; },
+    getItem() { return this.data; },
+    removeItem(k) { assert.strictEqual(k, Save.KEY); this.data = null; },
+  };
+  Save.store(mem, Save.recordCatch(Save.defaults(TYPES), "bear"));
+  Save.wipe(mem);
+  const loaded = Save.load(mem, TYPES);
+  assert.strictEqual(loaded.bestScore, 0);
+  assert.strictEqual(loaded.dexCounts.bear, 0);
+  Save.wipe(null);
+  Save.wipe({ removeItem() { throw new Error("blocked"); } });
+}
+
+{
+  const hacked = { getItem() { return JSON.stringify({ hacked: true, bestScore: 5 }); } };
+  const loaded = Save.load(hacked, TYPES);
+  assert.strictEqual(loaded.hacked, undefined);
+  assert.strictEqual(loaded.bestScore, 5);
+}
+
 console.log("save.test.js ok");
