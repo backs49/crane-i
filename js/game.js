@@ -40,6 +40,7 @@
     returnDist: 0,
     lastGrip: null,
     strainTimer: 0,
+    save: Save.load(window.localStorage, TYPE_KEYS),
     collection: Fun.emptyCollection(Object.keys(PLUSH_TYPES)),
     consolation: Fun.emptyConsolation(),
     streak: Fun.emptyStreak(),
@@ -351,7 +352,7 @@
     dexBar.innerHTML = "";
     for (const type of TYPE_KEYS) {
       const dot = document.createElement("span");
-      const n = Fun.typeCount(state.collection, type);
+      const n = state.save.dexCounts[type] || 0;
       dot.className = "dex-dot" + (n ? " on" : "");
       dot.style.setProperty("--c", PLUSH_TYPES[type].color);
       dot.title = `${PLUSH_TYPES[type].name} ${n}`;
@@ -431,6 +432,8 @@
     state.score += plush.points;
     state.prizes += 1;
     state.collection = Fun.recordCatch(state.collection, plush.type);
+    state.save = Save.recordCatch(state.save, plush.type);
+    Save.store(window.localStorage, state.save);
     state.streak = Fun.noteCatch(state.streak);
     scoreEl.textContent = String(state.score);
     prizeCount.textContent = String(state.prizes);
@@ -509,13 +512,20 @@
     detachGrips(true);
     setMode("gameover");
     AudioFx.over();
+    const res = Save.recordGameOver(state.save, state.score);
+    state.save = res.data;
+    Save.store(window.localStorage, state.save);
     document.getElementById("overScore").textContent = String(state.score);
     document.getElementById("overPrizes").textContent = String(state.prizes);
-    document.getElementById("overEyebrow").textContent = state.missionDone
-      ? "부탁도 해냈어요"
-      : state.prizes === 0
-        ? "집게가 오늘따라 더 약해요"
-        : "오늘 밤의 수확";
+    document.getElementById("overBest").textContent = String(state.save.bestScore);
+    document.getElementById("overBestWrap").classList.toggle("new", res.isBest);
+    document.getElementById("overEyebrow").textContent = res.isBest
+      ? "최고 기록 갱신!"
+      : state.missionDone
+        ? "부탁도 해냈어요"
+        : state.prizes === 0
+          ? "집게가 오늘따라 더 약해요"
+          : "오늘 밤의 수확";
     overOverlay.classList.remove("hidden");
   }
 
@@ -552,6 +562,8 @@
     titleOverlay.classList.add("hidden");
     overOverlay.classList.add("hidden");
     resetMatch(true);
+    state.save = Save.recordPlay(state.save);
+    Save.store(window.localStorage, state.save);
     state.ignoreGrab = 0.35;
     syncKidHud();
     setMode("aiming");
@@ -880,6 +892,12 @@
           label: state.mission.label,
           done: state.missionDone,
         },
+        save: {
+          bestScore: state.save.bestScore,
+          totalPrizes: state.save.totalPrizes,
+          totalPlays: state.save.totalPlays,
+          dexUnique: Save.dexUnique(state.save),
+        },
       };
     },
     start: startGame,
@@ -893,6 +911,11 @@
       Input.grabQueued = true;
     },
     end: endGame,
+    wipeSave() {
+      state.save = Save.defaults(TYPE_KEYS);
+      Save.store(window.localStorage, state.save);
+      syncKidHud();
+    },
   };
 
   setMode("title");
