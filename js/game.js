@@ -40,14 +40,16 @@
     returnDist: 0,
     lastGrip: null,
     strainTimer: 0,
-    save: Save.load(window.localStorage, TYPE_KEYS),
+    save: Save.touchDaily(Save.load(window.localStorage, TYPE_KEYS), Fun.dayKey()).data,
     collection: Fun.emptyCollection(Object.keys(PLUSH_TYPES)),
     consolation: Fun.emptyConsolation(),
     streak: Fun.emptyStreak(),
-    mission: Fun.pickMission(Object.keys(PLUSH_TYPES)),
+    mission: Fun.dailyMission(TYPE_KEYS, Fun.dayKey()),
     missionDone: false,
     debug: new URLSearchParams(location.search).has("debug"),
   };
+
+  state.missionDone = !!state.save.daily.missionDone;
 
   const claw = {
     x: HOME.x,
@@ -343,7 +345,7 @@
   function syncKidHud() {
     if (!missionBar || !scrapBar || !dexBar) return;
     const mission = state.mission;
-    const have = Fun.missionCaught(mission, state.collection);
+    const have = Math.min(state.save.daily.missionCount || 0, mission.need);
     missionBar.textContent = state.missionDone
       ? `부탁 완료! ${mission.label}`
       : `부탁 ${mission.label} ${have}/${mission.need}`;
@@ -441,12 +443,17 @@
     const juice = Math.round(42 * Fun.juiceScale(state.streak));
     Particles.emit(CHUTE.x, CHUTE.y, "win", juice);
     let msg = `${plush.name} +${plush.points}`;
-    if (!state.missionDone && Fun.missionComplete(state.mission, state.collection)) {
-      state.missionDone = true;
-      state.coins += 1;
-      coinEl.textContent = String(state.coins);
-      msg = `부탁 성공! ${plush.name} +${plush.points}`;
+    if (!state.missionDone && plush.type === state.mission.type) {
+      state.save = Save.noteMissionCatch(state.save);
+      if (state.save.daily.missionCount >= state.mission.need) {
+        state.save = Save.completeMission(state.save);
+        state.missionDone = true;
+        state.coins += 2;
+        coinEl.textContent = String(state.coins);
+        msg = `부탁 성공! 코인 +2`;
+      }
     }
+    Save.store(window.localStorage, state.save);
     toast(msg, "win");
     addPrizeChip(plush.type);
     syncKidHud();
@@ -542,8 +549,8 @@
       state.collection = Fun.emptyCollection(TYPE_KEYS);
       state.consolation = Fun.emptyConsolation();
       state.streak = Fun.emptyStreak();
-      state.mission = Fun.pickMission(TYPE_KEYS);
-      state.missionDone = false;
+      state.mission = Fun.dailyMission(TYPE_KEYS, Fun.dayKey());
+      state.missionDone = !!state.save.daily.missionDone;
     }
     coinEl.textContent = String(state.coins);
     scoreEl.textContent = String(state.score);
@@ -561,12 +568,21 @@
     AudioFx.coin();
     titleOverlay.classList.add("hidden");
     overOverlay.classList.add("hidden");
+    state.save = Save.touchDaily(state.save, Fun.dayKey()).data;
     resetMatch(true);
     state.save = Save.recordPlay(state.save);
+    let bonusToast = null;
+    if (!state.save.daily.loginBonus) {
+      state.save = Save.grantLogin(state.save);
+      state.coins += 2;
+      coinEl.textContent = String(state.coins);
+      bonusToast = "오늘의 첫 코인! +2";
+    }
     Save.store(window.localStorage, state.save);
     state.ignoreGrab = 0.35;
     syncKidHud();
     setMode("aiming");
+    if (bonusToast) toast(bonusToast, "win");
   }
 
   function updateBlinks(dt) {
