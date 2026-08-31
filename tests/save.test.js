@@ -98,4 +98,23 @@ const TYPES = ["bear", "bunny", "unicorn"];
   assert.strictEqual(back.daily.missionDone, true);
 }
 
+{
+  let d = Save.defaults(TYPES);
+  assert.strictEqual(d.moonUnlocked, false);
+  assert.strictEqual(Save.dexComplete(d, TYPES), false);
+  d = Save.recordCatch(d, "bear");
+  d = Save.recordCatch(d, "bunny");
+  assert.strictEqual(Save.dexComplete(d, TYPES), false);
+  d = Save.recordCatch(d, "unicorn");
+  assert.strictEqual(Save.dexComplete(d, TYPES), true);
+  assert.strictEqual(Save.dexComplete(d, ["bear", "bunny"]), true);
+  d = Save.unlockMoon(d);
+  assert.strictEqual(d.moonUnlocked, true);
+  const mem = { data: null, setItem(k, v) { this.data = v; }, getItem() { return this.data; } };
+  Save.store(mem, d);
+  assert.strictEqual(Save.load(mem, TYPES).moonUnlocked, true);
+  const legacy = { getItem() { return JSON.stringify({ bestScore: 10 }); } };
+  assert.strictEqual(Save.load(legacy, TYPES).moonUnlocked, false);
+}
+
 console.log("save.test.js ok");

@@ -27,7 +27,7 @@ const Save = {
   defaults(typeKeys) {
     const dexCounts = Object.create(null);
     for (const t of typeKeys) dexCounts[t] = 0;
-    return { v: 1, bestScore: 0, totalPrizes: 0, totalPlays: 0, dexCounts, daily: this.emptyDaily("") };
+    return { v: 1, bestScore: 0, totalPrizes: 0, totalPlays: 0, dexCounts, daily: this.emptyDaily(""), moonUnlocked: false };
   },
 
   normalize(raw, typeKeys) {
@@ -52,6 +52,7 @@ const Save = {
         loginBonus: !!raw.daily.loginBonus,
       };
     }
+    out.moonUnlocked = !!raw.moonUnlocked;
     return out;
   },
 
@@ -90,6 +91,14 @@ const Save = {
 
   dexUnique(data) {
     return Object.keys(data.dexCounts || {}).filter((k) => data.dexCounts[k] > 0).length;
+  },
+
+  dexComplete(data, keys) {
+    return keys.every((k) => (data.dexCounts[k] || 0) > 0);
+  },
+
+  unlockMoon(data) {
+    return Object.assign({}, data, { moonUnlocked: true });
   },
 };
 
