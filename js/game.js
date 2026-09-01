@@ -16,6 +16,9 @@
   const missionBar = document.getElementById("missionBar");
   const scrapBar = document.getElementById("scrapBar");
   const dexBar = document.getElementById("dexBar");
+  const dexOverlay = document.getElementById("dexOverlay");
+  const dexGrid = document.getElementById("dexGrid");
+  const dexTitle = document.getElementById("dexTitle");
   const TYPE_KEYS = Object.keys(PLUSH_TYPES);
   const BASE_TYPE_KEYS = TYPE_KEYS.filter((k) => PLUSH_TYPES[k].rarity !== "secret");
   const storage = (() => { try { return window.localStorage; } catch (_) { return null; } })();
@@ -387,6 +390,63 @@
       dot.title = hidden ? "???" : `${spec.name} ${n}`;
       dexBar.appendChild(dot);
     }
+  }
+
+  function dexCard(type) {
+    const spec = PLUSH_TYPES[type];
+    const n = state.save.dexCounts[type] || 0;
+    const secretHidden = spec.rarity === "secret" && !n;
+    const card = document.createElement("div");
+    card.className = "dex-card" + (n ? "" : " off");
+    const c = document.createElement("canvas");
+    c.width = 132;
+    c.height = 132;
+    const cctx = c.getContext("2d");
+    cctx.scale(2, 2);
+    if (secretHidden) {
+      cctx.fillStyle = "#cbb6ff";
+      cctx.font = "34px 'Bagel Fat One', 'Jua', sans-serif";
+      cctx.textAlign = "center";
+      cctx.textBaseline = "middle";
+      cctx.fillText("?", 33, 36);
+    } else {
+      Draw.plush(cctx, { type, x: 33, y: 36, radius: 24, angle: 0, liftZ: 0, blink: 1, react: n ? "success" : "idle" });
+      if (!n) {
+        cctx.globalCompositeOperation = "source-atop";
+        cctx.fillStyle = "rgba(20, 8, 26, 0.82)";
+        cctx.fillRect(0, 0, 66, 66);
+        cctx.globalCompositeOperation = "source-over";
+      }
+    }
+    const name = document.createElement("span");
+    name.className = "dex-name";
+    name.textContent = secretHidden ? "???" : spec.name;
+    const count = document.createElement("span");
+    count.className = "dex-count";
+    count.textContent = n ? `×${n}` : "미발견";
+    card.appendChild(c);
+    card.appendChild(name);
+    card.appendChild(count);
+    return card;
+  }
+
+  function openDex() {
+    dexGrid.innerHTML = "";
+    for (const type of TYPE_KEYS) dexGrid.appendChild(dexCard(type));
+    const baseCaught = BASE_TYPE_KEYS.filter((k) => (state.save.dexCounts[k] || 0) > 0).length;
+    const moonCaught = TYPE_KEYS.some(
+      (k) => PLUSH_TYPES[k].rarity === "secret" && (state.save.dexCounts[k] || 0) > 0,
+    );
+    dexTitle.textContent = `도감 ${baseCaught}/${BASE_TYPE_KEYS.length}` + (moonCaught ? " + 달토끼" : "");
+    dexOverlay.classList.remove("hidden");
+    state.paused = true;
+    AudioFx.stopMotor();
+  }
+
+  function closeDex() {
+    dexOverlay.classList.add("hidden");
+    Input.grabQueued = false;
+    state.paused = document.hidden;
   }
 
   function carryProgress() {
@@ -933,6 +993,20 @@
       sharing = false;
     }
   });
+  dexBar.addEventListener("click", () => {
+    AudioFx.bump();
+    openDex();
+  });
+  dexBar.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") openDex();
+  });
+  document.getElementById("dexCloseBtn").addEventListener("click", closeDex);
+  dexOverlay.addEventListener("click", (e) => {
+    if (e.target === dexOverlay) closeDex();
+  });
+  window.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && !dexOverlay.classList.contains("hidden")) closeDex();
+  });
   muteBtn.addEventListener("click", () => {
     AudioFx.unlock();
     AudioFx.setMuted(!AudioFx.muted);
@@ -943,7 +1017,7 @@
   });
 
   document.addEventListener("visibilitychange", () => {
-    state.paused = document.hidden;
+    state.paused = document.hidden || !dexOverlay.classList.contains("hidden");
     if (state.paused) AudioFx.stopMotor();
   });
 

@@ -86,7 +86,7 @@
           <div class="mission" id="missionBar">오늘의 부탁</div>
           <div class="scraps" id="scrapBar">♥ 0</div>
         </section>
-        <div class="dex" id="dexBar" aria-label="도감"></div>
+        <div class="dex" id="dexBar" aria-label="도감 열기" role="button" tabindex="0" title="도감 열기"></div>
 
         <section class="console">
           <div class="prize-head">
@@ -139,6 +139,15 @@
         </div>
         <button type="button" class="primary" id="retryBtn">한 판 더</button>
         <button type="button" class="ghost" id="shareBtn">자랑하기 📸</button>
+      </div>
+    </div>
+
+    <div class="overlay hidden" id="dexOverlay">
+      <div class="dialog candy dex-dialog">
+        <p class="eyebrow">몰랑 도감</p>
+        <h2 id="dexTitle">도감</h2>
+        <div class="dex-grid" id="dexGrid"></div>
+        <button type="button" class="primary" id="dexCloseBtn">닫기</button>
       </div>
     </div>
 
