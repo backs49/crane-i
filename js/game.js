@@ -50,6 +50,8 @@
     consolation: Fun.emptyConsolation(),
     streak: Fun.emptyStreak(),
     fever: 0,
+    aimTime: 0,
+    quickGrab: false,
     mission: Fun.dailyMission(BASE_TYPE_KEYS, Fun.dayKey()),
     missionDone: false,
     lastBest: false,
@@ -528,7 +530,9 @@
     plush.collected = true;
     plush.react = "success";
     Composite.remove(engine.world, plush.body);
-    state.score += plush.points;
+    const quick = state.quickGrab;
+    state.quickGrab = false;
+    state.score += plush.points + (quick ? QUICK.points : 0);
     state.prizes += 1;
     state.collection = Fun.recordCatch(state.collection, plush.type);
     state.save = Save.recordCatch(state.save, plush.type);
@@ -555,6 +559,7 @@
       msg = "도감 완성! 달토끼가 찾아와요";
       Particles.emit(CHUTE.x, CHUTE.y, "gold", 60);
     }
+    if (quick) msg += ` · 빠른 손 +${QUICK.points}`;
     Save.store(storage, state.save);
     toast(msg, "win");
     addPrizeChip(plush);
@@ -606,6 +611,7 @@
     statusEl.textContent = labels[mode] || mode;
     statusEl.classList.toggle("busy", clawBusy() && mode !== "title");
     grabLabel.textContent = mode === "descending" ? "닫기" : "집기";
+    if (mode === "aiming") state.aimTime = 0;
   }
 
   function spendAndDrop() {
@@ -614,6 +620,7 @@
       return;
     }
     state.coins -= 1;
+    state.quickGrab = state.aimTime <= QUICK.window;
     coinEl.textContent = String(state.coins);
     AudioFx.grab();
     setMode("descending");
@@ -729,6 +736,7 @@
     } else if (state.mode === "gameover" && grab) {
       startGame();
     } else if (state.mode === "aiming") {
+      state.aimTime += dt;
       claw.x += vec.x * CLAW_SPEED * dt;
       claw.y += vec.y * CLAW_SPEED * dt;
       keepClawInBox();
@@ -1053,6 +1061,8 @@
         consolation: { scraps: state.consolation.scraps, boost: Fun.pendingBoost(state.consolation) },
         streak: state.streak,
         fever: state.fever,
+        aimTime: Math.round(state.aimTime * 10) / 10,
+        quickWindow: QUICK.window,
         pityAt: Grip.PITY_AT,
         mission: {
           type: state.mission.type,

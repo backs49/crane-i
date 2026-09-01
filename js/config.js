@@ -43,6 +43,7 @@ const PLUSH_TYPES = {
 
 const GOLDEN = { chance: 0.18, mult: 3 };
 const FEVER = { grabs: 3, bonus: 0.1 };
+const QUICK = { window: 10, points: 30 };
 
 const SPAWN_BAG = [
   "bear",
