@@ -147,4 +147,22 @@ function collection() {
   assert.ok(idx >= 0 && idx < 7);
 }
 
+{
+  const code = Fun.encodeChallenge({ score: 520, prizes: 4, dayKey: "2026-09-01" });
+  assert.ok(!code.includes("+") && !code.includes("/") && !code.includes("="));
+  const back = Fun.decodeChallenge(code);
+  assert.strictEqual(back.score, 520);
+  assert.strictEqual(back.prizes, 4);
+  assert.strictEqual(back.dayKey, "2026-09-01");
+  assert.strictEqual(Fun.decodeChallenge("garbage!!!"), null);
+  assert.strictEqual(Fun.decodeChallenge(null), null);
+  assert.strictEqual(Fun.decodeChallenge(""), null);
+  assert.strictEqual(Fun.decodeChallenge(Fun._b64encode(JSON.stringify({ s: -5 }))), null);
+  assert.strictEqual(Fun.decodeChallenge(Fun._b64encode(JSON.stringify({ s: 99999999 }))), null);
+  assert.strictEqual(Fun.decodeChallenge("x".repeat(300)), null);
+  const noPrizes = Fun.decodeChallenge(Fun._b64encode(JSON.stringify({ s: 100 })));
+  assert.strictEqual(noPrizes.score, 100);
+  assert.strictEqual(noPrizes.prizes, 0);
+}
+
 console.log("fun.test.js ok");

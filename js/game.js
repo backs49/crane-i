@@ -56,10 +56,17 @@
     missionDone: false,
     lastBest: false,
     goldenCaught: Object.create(null),
+    challenge: Fun.decodeChallenge(new URLSearchParams(location.search).get("vs")),
     debug: new URLSearchParams(location.search).has("debug"),
   };
 
   state.missionDone = !!state.save.daily.missionDone;
+
+  if (state.challenge) {
+    const vsBanner = document.getElementById("vsBanner");
+    vsBanner.hidden = false;
+    vsBanner.textContent = `⚔️ 도전장 도착! 친구 기록 ${state.challenge.score}점`;
+  }
 
   const claw = {
     x: HOME.x,
@@ -638,13 +645,17 @@
     document.getElementById("overPrizes").textContent = String(state.prizes);
     document.getElementById("overBest").textContent = String(state.save.bestScore);
     document.getElementById("overBestWrap").classList.toggle("new", res.isBest);
-    document.getElementById("overEyebrow").textContent = res.isBest
-      ? "최고 기록 갱신!"
-      : state.missionDone
-        ? "부탁도 해냈어요"
-        : state.prizes === 0
-          ? "집게가 오늘따라 더 약해요"
-          : "오늘 밤의 수확";
+    document.getElementById("overEyebrow").textContent = state.challenge
+      ? state.score > state.challenge.score
+        ? "도전 성공! 친구 기록을 이겼어요"
+        : `아깝다! 친구 기록 ${state.challenge.score}점`
+      : res.isBest
+        ? "최고 기록 갱신!"
+        : state.missionDone
+          ? "부탁도 해냈어요"
+          : state.prizes === 0
+            ? "집게가 오늘따라 더 약해요"
+            : "오늘 밤의 수확";
     overOverlay.classList.remove("hidden");
   }
 
@@ -696,7 +707,8 @@
     state.ignoreGrab = 0.35;
     syncKidHud();
     setMode("aiming");
-    if (bonusToast) toast(bonusToast, "win");
+    if (state.challenge) toast(`친구 기록 ${state.challenge.score}점에 도전!`, "win");
+    else if (bonusToast) toast(bonusToast, "win");
   }
 
   function updateBlinks(dt) {
@@ -1001,6 +1013,37 @@
       sharing = false;
     }
   });
+  let challenging = false;
+  document.getElementById("challengeBtn").addEventListener("click", async () => {
+    if (challenging) return;
+    challenging = true;
+    try {
+      const code = Fun.encodeChallenge({ score: state.score, prizes: state.prizes, dayKey: Fun.dayKey() });
+      const url = `${location.origin}${location.pathname}?vs=${code}`;
+      const text = `몰랑크레인에서 ${state.score}점! 나를 이겨봐 ⚔️`;
+      if (navigator.share) {
+        try {
+          await navigator.share({ title: "몰랑크레인 도전장", text, url });
+          toast("도전장을 보냈어요!", "win");
+          return;
+        } catch (err) {
+          if (err && err.name === "AbortError") return;
+        }
+      }
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        try {
+          await navigator.clipboard.writeText(`${text} ${url}`);
+          toast("도전장 링크 복사 완료!", "win");
+          return;
+        } catch (_) {
+          /* 권한 거부 시 아래 실패 토스트 */
+        }
+      }
+      toast("링크 복사에 실패했어요…", "fail");
+    } finally {
+      challenging = false;
+    }
+  });
   dexBar.addEventListener("click", () => {
     AudioFx.bump();
     openDex();
@@ -1061,6 +1104,7 @@
         consolation: { scraps: state.consolation.scraps, boost: Fun.pendingBoost(state.consolation) },
         streak: state.streak,
         fever: state.fever,
+        challenge: state.challenge ? { score: state.challenge.score, dayKey: state.challenge.dayKey } : null,
         aimTime: Math.round(state.aimTime * 10) / 10,
         quickWindow: QUICK.window,
         pityAt: Grip.PITY_AT,

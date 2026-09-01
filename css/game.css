@@ -656,6 +656,16 @@ h1 {
   box-shadow: 0 2px 0 #c47a12;
 }
 
+.vs-banner {
+  margin: 0 0 10px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: rgba(255, 121, 199, 0.14);
+  border: 2px solid var(--neon-pink);
+  color: var(--cotton);
+  font-size: 14px;
+}
+
 .ghost {
   width: 100%;
   margin-top: 10px;

@@ -105,6 +105,41 @@ const Fun = {
     return this.pickMission(typeKeys, this.seededRng("mission:" + key));
   },
 
+  _b64encode(str) {
+    if (typeof btoa === "function") return btoa(str);
+    return Buffer.from(str, "binary").toString("base64");
+  },
+
+  _b64decode(str) {
+    if (typeof atob === "function") return atob(str);
+    return Buffer.from(str, "base64").toString("binary");
+  },
+
+  encodeChallenge(ch) {
+    const raw = JSON.stringify({
+      v: 1,
+      s: Math.round(ch.score),
+      p: Math.round(ch.prizes || 0),
+      d: String(ch.dayKey || ""),
+    });
+    return this._b64encode(raw).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  },
+
+  decodeChallenge(str) {
+    try {
+      if (!str || typeof str !== "string" || str.length > 200) return null;
+      let b64 = str.replace(/-/g, "+").replace(/_/g, "/");
+      b64 += "=".repeat((4 - (b64.length % 4)) % 4);
+      const data = JSON.parse(this._b64decode(b64));
+      const score = data.s;
+      if (!Number.isFinite(score) || score < 0 || score > 1000000) return null;
+      const prizes = Number.isFinite(data.p) && data.p >= 0 ? Math.round(data.p) : 0;
+      return { score: Math.round(score), prizes, dayKey: typeof data.d === "string" ? data.d : "" };
+    } catch (_) {
+      return null;
+    }
+  },
+
   pickMission(typeKeys, rng = Math.random) {
     const type = typeKeys[Math.floor(rng() * typeKeys.length) % typeKeys.length];
     const need = rng() < 0.45 ? 2 : 1;
