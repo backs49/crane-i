@@ -1,3 +1,7 @@
+// 내 인형 검사 규칙은 myplush.js에 있다 (브라우저에서는 먼저 로드, Node에서는 require)
+const SaveMyPlush =
+  typeof MyPlush !== "undefined" ? MyPlush : typeof require !== "undefined" ? require("./myplush.js") : null;
+
 const Save = {
   KEY: "molang-crane:v1",
 
@@ -27,7 +31,7 @@ const Save = {
   defaults(typeKeys) {
     const dexCounts = Object.create(null);
     for (const t of typeKeys) dexCounts[t] = 0;
-    return { v: 1, bestScore: 0, totalPrizes: 0, totalPlays: 0, dexCounts, daily: this.emptyDaily(""), moonUnlocked: false, kidMode: true, room: {}, playLimit: 30, tutorialDone: false };
+    return { v: 1, bestScore: 0, totalPrizes: 0, totalPlays: 0, dexCounts, daily: this.emptyDaily(""), moonUnlocked: false, kidMode: true, room: {}, playLimit: 30, tutorialDone: false, myPlush: null };
   },
 
   normalize(raw, typeKeys) {
@@ -47,6 +51,7 @@ const Save = {
       room: this.normalizeRoom(raw.room, typeKeys),
       playLimit: this.LIMITS.includes(raw.playLimit) ? raw.playLimit : base.playLimit,
       tutorialDone: !!raw.tutorialDone,
+      myPlush: SaveMyPlush ? SaveMyPlush.normalize(raw.myPlush) : null,
     };
     if (raw.dexCounts && typeof raw.dexCounts === "object") {
       for (const t of typeKeys) out.dexCounts[t] = num(raw.dexCounts[t]);
@@ -97,6 +102,7 @@ const Save = {
       room: this.mergeRoom(a.room, b.room),
       playLimit: b.playLimit != null ? b.playLimit : a.playLimit,
       tutorialDone: !!(a.tutorialDone || b.tutorialDone),
+      myPlush: b.myPlush || a.myPlush || null,
     };
   },
 
@@ -212,6 +218,17 @@ const Save = {
 
   setPlayLimit(data, min) {
     return Object.assign({}, data, { playLimit: this.LIMITS.includes(min) ? min : data.playLimit });
+  },
+
+  setMyPlush(data, spec) {
+    const myPlush = SaveMyPlush ? SaveMyPlush.normalize(spec) : spec;
+    // 방에서 따로 붙인 이름이 있으면 지워서, 만들기 화면의 이름을 쓰게 한다
+    const room = Object.assign({}, data.room);
+    if (room.mine) {
+      room.mine = Object.assign({}, room.mine);
+      delete room.mine.name;
+    }
+    return Object.assign({}, data, { myPlush, room });
   },
 
   finishTutorial(data) {

@@ -1107,3 +1107,96 @@ h1 {
   margin-top: 10px;
   font-size: 20px;
 }
+
+/* 나만의 애착 인형 만들기 */
+.room-actions {
+  grid-template-columns: 1fr 1fr;
+}
+
+.room-actions .ghost {
+  margin-top: 8px;
+}
+
+.maker-dialog {
+  padding: 14px 16px 16px;
+}
+
+.maker-dialog h2 {
+  font-size: 26px;
+  margin: 0 0 6px;
+}
+
+#makerCanvas {
+  display: block;
+  width: min(42vw, 22dvh, 160px);
+  height: auto;
+  margin: 0 auto 4px;
+}
+
+.maker-rows {
+  display: grid;
+  gap: 6px;
+  text-align: left;
+}
+
+.maker-row {
+  display: grid;
+  grid-template-columns: 38px 1fr;
+  align-items: center;
+  gap: 6px;
+}
+
+.maker-row .lbl {
+  font-family: var(--display);
+  font-size: 14px;
+  color: var(--lilac);
+}
+
+.maker-row .opts {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding: 2px 2px 4px;
+  touch-action: pan-x;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+}
+
+.maker-row .opts::-webkit-scrollbar {
+  display: none;
+}
+
+.maker-row button {
+  flex: 0 0 auto;
+  border-radius: 999px;
+  padding: 6px 10px;
+  font-family: var(--display);
+  font-size: 14px;
+  color: var(--cotton);
+  background: rgba(255, 234, 244, 0.08);
+  border: 2px solid rgba(255, 234, 244, 0.3);
+  white-space: nowrap;
+}
+
+.maker-row button[aria-pressed="true"] {
+  border-color: var(--neon-lemon);
+  background: rgba(255, 227, 106, 0.18);
+  color: var(--neon-lemon);
+}
+
+.maker-row button.swatch {
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  background: var(--c);
+}
+
+.maker-row button.swatch[aria-pressed="true"] {
+  outline: 3px solid var(--neon-lemon);
+  outline-offset: 2px;
+  background: var(--c);
+}
+
+.maker-dialog .room-name .ghost {
+  font-size: 15px;
+}

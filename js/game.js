@@ -20,7 +20,8 @@
   const dexGrid = document.getElementById("dexGrid");
   const dexTitle = document.getElementById("dexTitle");
   const TYPE_KEYS = Object.keys(PLUSH_TYPES);
-  const BASE_TYPE_KEYS = TYPE_KEYS.filter((k) => PLUSH_TYPES[k].rarity !== "secret");
+  // 도감 완성 조건에는 비밀 인형(달토끼)과 직접 만든 인형을 넣지 않는다
+  const BASE_TYPE_KEYS = TYPE_KEYS.filter((k) => !["secret", "mine"].includes(PLUSH_TYPES[k].rarity));
   const storage = (() => { try { return window.localStorage; } catch (_) { return null; } })();
 
   const engine = Engine.create({
@@ -61,6 +62,16 @@
   };
 
   state.missionDone = !!state.save.daily.missionDone;
+  MyPlush.spec = state.save.myPlush;
+
+  // 직접 만든 인형은 만들기 전에는 도감·방 어디에도 보이지 않는다
+  function typeVisible(type) {
+    return type !== MyPlush.TYPE || !!MyPlush.spec;
+  }
+
+  function plushName(type) {
+    return type === MyPlush.TYPE && MyPlush.spec ? MyPlush.spec.name : PLUSH_TYPES[type].name;
+  }
 
   if (state.challenge) {
     const vsBanner = document.getElementById("vsBanner");
@@ -176,7 +187,8 @@
     });
     return {
       type,
-      name: spec.name,
+      name: plushName(type),
+      mineMark: type === MyPlush.TYPE,
       points: spec.points,
       radius: spec.radius,
       body,
@@ -195,7 +207,9 @@
   function fillBox(bag) {
     state.plushes = state.plushes.filter((p) => !p.collected);
     const born = [];
-    const full = state.save.moonUnlocked ? bag.concat(["moonbunny", "moonbunny"]) : bag;
+    let full = state.save.moonUnlocked ? bag.concat(["moonbunny", "moonbunny"]) : bag;
+    const mineIn = !!MyPlush.spec && Math.random() < MINE.chance;
+    if (mineIn) full = full.concat([MyPlush.TYPE]);
     for (const type of full) {
       const p = createPlush(type, spawnPos());
       state.plushes.push(p);
@@ -211,6 +225,11 @@
           if (state.mode !== "title" && state.mode !== "gameover") toast("황금 인형 등장!", "win");
         }, 1400);
       }
+    }
+    if (mineIn && state.mode !== "title") {
+      setTimeout(() => {
+        if (state.mode !== "title" && state.mode !== "gameover") toast(I18N.t("mine.inBox", { name: MyPlush.spec.name }), "win");
+      }, 2800);
     }
     for (let i = 0; i < 120; i++) Engine.update(engine, 1000 / 60);
   }
@@ -421,13 +440,14 @@
     scrapBar.textContent = `♥ ${state.consolation.scraps}`;
     dexBar.innerHTML = "";
     for (const type of TYPE_KEYS) {
+      if (!typeVisible(type)) continue;
       const dot = document.createElement("span");
       const spec = PLUSH_TYPES[type];
       const n = state.save.dexCounts[type] || 0;
       const hidden = spec.rarity === "secret" && !n;
       dot.className = "dex-dot" + (n ? " on" : "") + (hidden ? " secret" : "");
       dot.style.setProperty("--c", spec.color);
-      dot.title = hidden ? "???" : `${spec.name} ${n}`;
+      dot.title = hidden ? "???" : `${plushName(type)} ${n}`;
       dexBar.appendChild(dot);
     }
   }
@@ -460,7 +480,7 @@
     }
     const name = document.createElement("span");
     name.className = "dex-name";
-    name.textContent = secretHidden ? "???" : spec.name;
+    name.textContent = secretHidden ? "???" : plushName(type);
     const count = document.createElement("span");
     count.className = "dex-count";
     count.textContent = n ? `×${n}` : "미발견";
@@ -472,7 +492,7 @@
 
   function openDex() {
     dexGrid.innerHTML = "";
-    for (const type of TYPE_KEYS) dexGrid.appendChild(dexCard(type));
+    for (const type of TYPE_KEYS) if (typeVisible(type)) dexGrid.appendChild(dexCard(type));
     const baseCaught = BASE_TYPE_KEYS.filter((k) => (state.save.dexCounts[k] || 0) > 0).length;
     const moonCaught = TYPE_KEYS.some(
       (k) => PLUSH_TYPES[k].rarity === "secret" && (state.save.dexCounts[k] || 0) > 0,
@@ -490,7 +510,7 @@
   }
 
   function overlayOpen() {
-    return [dexOverlay, roomOverlay, villageOverlay, gateOverlay, breakOverlay, timeOverlay].some(
+    return [dexOverlay, roomOverlay, villageOverlay, makerOverlay, gateOverlay, breakOverlay, timeOverlay].some(
       (el) => !el.classList.contains("hidden"),
     );
   }
@@ -555,11 +575,15 @@
   const roomNameBtn = document.getElementById("roomNameBtn");
   const roomNameRow = document.getElementById("roomNameRow");
   const roomNameInput = document.getElementById("roomNameInput");
-  const NAMES = Object.fromEntries(TYPE_KEYS.map((k) => [k, PLUSH_TYPES[k].name]));
   const roomUi = { open: false, list: [], anim: {}, fx: [], selected: null, drag: null, last: 0, time: 0 };
 
+  // 직접 만든 인형은 뽑지 않아도 처음부터 방에 산다
   function roomResidents() {
-    return Room.residents(state.save.dexCounts, state.save.room, TYPE_KEYS, NAMES);
+    const names = Object.fromEntries(TYPE_KEYS.map((k) => [k, plushName(k)]));
+    const dex = Object.assign({}, state.save.dexCounts);
+    if (MyPlush.spec) dex[MyPlush.TYPE] = Math.max(1, dex[MyPlush.TYPE] || 0);
+    else delete dex[MyPlush.TYPE];
+    return Room.residents(dex, state.save.room, TYPE_KEYS, names);
   }
 
   function saveRoom(room) {
@@ -576,6 +600,7 @@
 
   function openRoom() {
     roomUi.list = roomResidents();
+    document.getElementById("makerBtn").textContent = I18N.t(MyPlush.spec ? "maker.openEdit" : "maker.open");
     roomUi.anim = {};
     roomUi.fx = [];
     selectResident(null);
@@ -648,7 +673,7 @@
     const petFreq = 660 + Math.random() * 180;
     AudioFx.tone(petFreq, 0.12, "sine", 0.12, petFreq * 1.4);
     const after = Room.hearts(p.pets + 1);
-    if (after > before) toast(`${p.name}와(과) 더 친해졌어요! ♥${after}`, "win");
+    if (after > before) toast(I18N.t("village.heartUp", { name: p.name, n: after }), "win");
     if (navigator.vibrate) navigator.vibrate(12);
   }
 
@@ -697,7 +722,13 @@
   });
   const commitName = () => {
     if (!roomUi.selected) return;
-    saveRoom(Room.rename(state.save.room, roomUi.selected, roomNameInput.value));
+    if (roomUi.selected === MyPlush.TYPE && MyPlush.spec) {
+      // 내 인형의 이름은 만들기 정보에 함께 저장한다
+      const name = MyPlush.cleanName(roomNameInput.value) || MyPlush.spec.name;
+      saveMyPlush(Object.assign({}, MyPlush.spec, { name }));
+    } else {
+      saveRoom(Room.rename(state.save.room, roomUi.selected, roomNameInput.value));
+    }
     roomNameRow.hidden = true;
     roomNameInput.blur();
     toast("이름을 지었어요!", "win");
@@ -749,6 +780,143 @@
   document.getElementById("overRoomBtn").addEventListener("click", openRoom);
   roomOverlay.addEventListener("click", (e) => {
     if (e.target === roomOverlay) closeRoom();
+  });
+
+  // ---- 나만의 애착 인형 만들기 ----
+  const makerOverlay = document.getElementById("makerOverlay");
+  const makerCanvas = document.getElementById("makerCanvas");
+  const makerRows = document.getElementById("makerRows");
+  const makerName = document.getElementById("makerName");
+  const maker = { open: false, draft: null, time: 0, last: 0, bounce: 0 };
+
+  function saveMyPlush(spec) {
+    const fresh = !MyPlush.spec;
+    state.save = Save.setMyPlush(state.save, spec);
+    MyPlush.spec = state.save.myPlush;
+    Save.store(storage, state.save);
+    roomUi.list = roomResidents();
+    syncKidHud();
+    return fresh;
+  }
+
+  function makerOptions() {
+    const colors = MyPlush.COLORS.map((c, i) => ({ value: c, swatch: c, label: I18N.t("maker.color", { n: i + 1 }) }));
+    const keyed = (field, prefix, list) => list.map((v) => ({ value: v, label: I18N.t(`${prefix}.${v}`) }));
+    return [
+      { field: "ears", items: keyed("ears", "maker.ears", MyPlush.EARS) },
+      { field: "color", items: colors },
+      { field: "eyes", items: keyed("eyes", "maker.eyes", MyPlush.EYES) },
+      { field: "cheeks", items: [{ value: true, label: I18N.t("maker.cheeks.on") }, { value: false, label: I18N.t("maker.cheeks.off") }] },
+      { field: "accessory", items: keyed("accessory", "maker.acc", MyPlush.ACCESSORIES) },
+      { field: "persona", items: MyPlush.PERSONAS.map((v) => ({ value: v, label: I18N.t(`persona.${v}`) })) },
+    ];
+  }
+
+  function renderMakerRows() {
+    makerRows.innerHTML = "";
+    for (const row of makerOptions()) {
+      const wrap = document.createElement("div");
+      wrap.className = "maker-row";
+      const lbl = document.createElement("span");
+      lbl.className = "lbl";
+      lbl.textContent = I18N.t(`maker.row.${row.field}`);
+      const opts = document.createElement("div");
+      opts.className = "opts";
+      for (const it of row.items) {
+        const b = document.createElement("button");
+        b.type = "button";
+        if (it.swatch) {
+          b.className = "swatch";
+          b.style.setProperty("--c", it.swatch);
+          b.setAttribute("aria-label", it.label);
+        } else {
+          b.textContent = it.label;
+        }
+        b.setAttribute("aria-pressed", maker.draft[row.field] === it.value ? "true" : "false");
+        b.addEventListener("click", () => {
+          maker.draft = Object.assign({}, maker.draft, { [row.field]: it.value });
+          maker.bounce = 1;
+          AudioFx.tone(600 + Math.random() * 200, 0.08, "triangle", 0.08);
+          for (const sib of opts.children) sib.setAttribute("aria-pressed", sib === b ? "true" : "false");
+        });
+        opts.appendChild(b);
+      }
+      wrap.appendChild(lbl);
+      wrap.appendChild(opts);
+      makerRows.appendChild(wrap);
+    }
+  }
+
+  function openMaker() {
+    maker.draft = Object.assign({}, MyPlush.spec || MyPlush.defaults());
+    makerName.value = maker.draft.name;
+    makerName.placeholder = I18N.t("maker.namePlaceholder");
+    document.getElementById("makerTitle").textContent = I18N.t(MyPlush.spec ? "maker.titleEdit" : "maker.title");
+    renderMakerRows();
+    closeRoom();
+    makerOverlay.classList.remove("hidden");
+    state.paused = true;
+    AudioFx.stopMotor();
+    if (!maker.open) {
+      maker.open = true;
+      maker.last = performance.now();
+      requestAnimationFrame(makerFrame);
+    }
+  }
+
+  function closeMaker(backToRoom) {
+    makerOverlay.classList.add("hidden");
+    maker.open = false;
+    Input.grabQueued = false;
+    state.paused = document.hidden || overlayOpen();
+    if (backToRoom) openRoom();
+  }
+
+  function makerFrame(now) {
+    if (!maker.open) return;
+    const dt = Math.min(0.05, (now - maker.last) / 1000);
+    maker.last = now;
+    maker.time += dt;
+    maker.bounce = Math.max(0, maker.bounce - dt * 1.6);
+    const g = makerCanvas.getContext("2d");
+    g.setTransform(1, 0, 0, 1, 0, 0);
+    g.clearRect(0, 0, makerCanvas.width, makerCanvas.height);
+    g.setTransform(makerCanvas.width / 160, 0, 0, makerCanvas.height / 160, 0, 0);
+    const blinkPhase = maker.time % 3.2;
+    const b = Math.sin(maker.bounce * Math.PI * 3) * maker.bounce;
+    Draw.plush(g, {
+      type: MyPlush.TYPE,
+      spec: maker.draft,
+      x: 80,
+      y: 92 - Math.abs(b) * 10,
+      radius: 46,
+      angle: Math.sin(maker.time * 1.4) * 0.05,
+      liftZ: 0,
+      blink: blinkPhase > 3.05 ? 0.1 : 1,
+      react: "idle",
+      squashX: b * 0.08,
+      squashY: -b * 0.1,
+    });
+    requestAnimationFrame(makerFrame);
+  }
+
+  document.getElementById("makerBtn").addEventListener("click", openMaker);
+  document.getElementById("makerDice").addEventListener("click", () => {
+    maker.draft = MyPlush.random(Math.random, makerName.value);
+    maker.bounce = 1;
+    renderMakerRows();
+    AudioFx.tone(520, 0.1, "triangle", 0.1, 880);
+  });
+  document.getElementById("makerSave").addEventListener("click", () => {
+    const name = MyPlush.cleanName(makerName.value) || MyPlush.defaults().name;
+    const fresh = saveMyPlush(Object.assign({}, maker.draft, { name }));
+    AudioFx.win();
+    closeMaker(true);
+    toast(I18N.t(fresh ? "maker.born" : "maker.updated", { name }), "win");
+  });
+  document.getElementById("makerClose").addEventListener("click", () => closeMaker(true));
+  makerOverlay.addEventListener("click", (e) => {
+    if (e.target === makerOverlay) closeMaker(true);
   });
 
   // ---- 몰랑 마을: 인형들이 돌아다니고, 톡 누르면 대화한다 ----
@@ -1172,6 +1340,10 @@
     const juice = Math.round(42 * Fun.juiceScale(state.streak));
     Particles.emit(CHUTE.x, CHUTE.y, plush.golden ? "gold" : "win", juice);
     let msg = plush.golden ? `황금 ${plush.name} +${plush.points}` : `${plush.name} +${plush.points}`;
+    if (plush.type === MyPlush.TYPE) {
+      msg = I18N.t("mine.caught", { name: plush.name, points: plush.points });
+      Particles.emit(CHUTE.x, CHUTE.y, "gold", 50);
+    }
     if (!state.missionDone && plush.type === state.mission.type) {
       state.save = Save.noteMissionCatch(state.save);
       if (state.save.daily.missionCount >= state.mission.need) {
@@ -1223,7 +1395,7 @@
   let floatToastTimer = 0;
 
   function anyOverlayVisible() {
-    return [titleOverlay, overOverlay, dexOverlay, roomOverlay, villageOverlay, gateOverlay, breakOverlay, timeOverlay].some(
+    return [titleOverlay, overOverlay, dexOverlay, roomOverlay, villageOverlay, makerOverlay, gateOverlay, breakOverlay, timeOverlay].some(
       (el) => el && !el.classList.contains("hidden"),
     );
   }
@@ -1546,6 +1718,7 @@
       Draw.plush(ctx, {
         type: p.type,
         golden: p.golden,
+        mineMark: p.mineMark,
         x: p.body.position.x + (p.slipX || 0),
         y: p.body.position.y + (p.slipY || 0),
         radius: p.radius,
@@ -1564,6 +1737,7 @@
       Draw.plush(ctx, {
         type: p.type,
         golden: p.golden,
+        mineMark: p.mineMark,
         x: p.body.position.x + (p.slipX || 0),
         y: p.body.position.y + (p.slipY || 0),
         radius: p.radius,
@@ -1720,6 +1894,7 @@
     if (e.key !== "Escape") return;
     if (!gateOverlay.classList.contains("hidden")) finishGate(false);
     else if (!villageOverlay.classList.contains("hidden")) closeVillage();
+    else if (!makerOverlay.classList.contains("hidden")) closeMaker(true);
     else if (!roomOverlay.classList.contains("hidden")) closeRoom();
     else if (!dexOverlay.classList.contains("hidden")) closeDex();
   });
@@ -1820,6 +1995,10 @@
       syncTimeBtn();
     },
     openVillage,
+    openMaker,
+    myPlush() {
+      return MyPlush.spec;
+    },
     village() {
       return {
         open: vil.open,
@@ -1836,6 +2015,7 @@
     wipeSave() {
       Save.wipe(storage);
       state.save = Save.touchDaily(Save.defaults(TYPE_KEYS), Fun.dayKey()).data;
+      MyPlush.spec = null;
       state.missionDone = false;
       state.mission = Fun.dailyMission(BASE_TYPE_KEYS, Fun.dayKey());
       Save.store(storage, state.save);

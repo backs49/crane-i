@@ -356,6 +356,7 @@ const Draw = {
     else if (type === "unicorn") this.unicorn(ctx, r, c, blink);
     else if (type === "star") this.starPlush(ctx, r, c, blink);
     else if (type === "moonbunny") this.moonbunny(ctx, r, c, blink);
+    else if (type === "mine" && typeof MyPlush !== "undefined") MyPlush.draw(ctx, r, p.spec || MyPlush.spec, blink);
     else this.felt(ctx, 0, 2, r * 0.92, r * 0.86, c);
 
     ctx.restore();
@@ -372,6 +373,24 @@ const Draw = {
       this.star(ctx, -r * 0.9, -r * 0.95, 4.5, 4, 0.45);
       ctx.fill();
       this.star(ctx, r * 0.95, -r * 0.55, 3.5, 4, 0.45);
+      ctx.fill();
+      ctx.restore();
+    }
+
+    // 뽑기 기계 안의 "내 인형"은 하트 고리로 표시해 아이가 금방 찾게 한다
+    if (p.mineMark) {
+      const pulse = 0.6 + 0.4 * Math.sin((typeof performance !== "undefined" ? performance.now() : 0) / 260);
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.strokeStyle = `rgba(255, 92, 154, ${0.55 + pulse * 0.4})`;
+      ctx.lineWidth = 2.5;
+      ctx.setLineDash([4, 4]);
+      ctx.beginPath();
+      ctx.arc(0, 0, r * scale + 5, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle = "#ff5c9a";
+      this.heart(ctx, 0, -r * scale - 10 - pulse * 2, 7);
       ctx.fill();
       ctx.restore();
     }

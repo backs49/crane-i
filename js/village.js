@@ -33,6 +33,7 @@ const Village = {
   ],
 
   persona(type) {
+    if (type === "mine" && typeof MyPlush !== "undefined" && MyPlush.spec) return MyPlush.spec.persona;
     return this.PERSONA[type] || "calm";
   },
 
@@ -54,6 +55,11 @@ const Village = {
   greet(p, ctx, rng = Math.random) {
     const vars = { name: p.name };
     if (ctx.missionType && ctx.missionType === p.type && rng() < 0.6) return I18N.t("talk.mission", vars);
+    // 직접 만든 인형은 가끔 "네가 만들어 줘서 기뻐" 같은 특별한 말을 한다
+    if (p.type === "mine" && rng() < 0.35) {
+      const acc = (typeof MyPlush !== "undefined" && MyPlush.spec && MyPlush.spec.accessory) || "none";
+      return I18N.pick("talk.mine.extra", { name: p.name, thing: I18N.t(`talk.mine.thing.${acc}`) }, rng);
+    }
     if (rng() < 0.3) return I18N.pick(`talk.time.${this.timeOfDay(ctx.hour)}`, vars, rng);
     return I18N.pick(`talk.${this.persona(p.type)}.greet.${this.mood(ctx.hearts)}`, vars, rng);
   },

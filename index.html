@@ -176,9 +176,25 @@
         <div class="room-actions">
           <button type="button" class="ghost" id="roomNameBtn" disabled>이름 짓기</button>
           <button type="button" class="ghost" id="roomPhotoBtn">사진 찍기 📸</button>
+          <button type="button" class="ghost" id="makerBtn" data-i18n="maker.open">내 인형 만들기 ✨</button>
+          <button type="button" class="ghost" id="villageBtn" data-i18n="village.enter">마을 산책 🌳</button>
         </div>
-        <button type="button" class="ghost" id="villageBtn" data-i18n="village.enter">마을 산책 🌳</button>
         <button type="button" class="primary" id="roomCloseBtn">닫기</button>
+      </div>
+    </div>
+
+    <div class="overlay hidden" id="makerOverlay">
+      <div class="dialog candy maker-dialog">
+        <p class="eyebrow" data-i18n="maker.eyebrow">나만의 애착 인형</p>
+        <h2 id="makerTitle" data-i18n="maker.title">내 인형 만들기</h2>
+        <canvas id="makerCanvas" width="320" height="320" aria-label="내 인형 미리보기"></canvas>
+        <div class="maker-rows" id="makerRows"></div>
+        <div class="room-name">
+          <input type="text" id="makerName" maxlength="8" autocomplete="off" />
+          <button type="button" class="ghost" id="makerDice" data-i18n="maker.dice">🎲 아무거나</button>
+        </div>
+        <button type="button" class="primary" id="makerSave" data-i18n="maker.save">이대로 만들기</button>
+        <button type="button" class="ghost" id="makerClose" data-i18n="maker.close">닫기</button>
       </div>
     </div>
 
@@ -234,6 +250,7 @@
     <script src="js/config.js"></script>
     <script src="js/i18n.js"></script>
     <script src="js/lang/ko.js"></script>
+    <script src="js/myplush.js"></script>
     <script src="js/save.js"></script>
     <script src="js/fun.js"></script>
     <script src="js/grip.js"></script>

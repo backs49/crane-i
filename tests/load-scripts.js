@@ -100,6 +100,7 @@ const files = [
   "js/config.js",
   "js/i18n.js",
   "js/lang/ko.js",
+  "js/myplush.js",
   "js/save.js",
   "js/fun.js",
   "js/grip.js",
