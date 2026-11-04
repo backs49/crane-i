@@ -1,7 +1,8 @@
-const CACHE = "molang-crane-v14"; // 게임 파일을 수정하는 커밋마다 버전을 올릴 것
+const CACHE = "molang-crane-v15"; // 게임 파일을 수정하는 커밋마다 버전을 올릴 것
 const SHELL = [
   ".",
   "index.html",
+  "privacy.html",
   "manifest.webmanifest",
   "css/game.css",
   "assets/fonts/fonts.css",
