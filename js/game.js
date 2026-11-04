@@ -803,7 +803,7 @@
     const colors = MyPlush.COLORS.map((c, i) => ({ value: c, swatch: c, label: I18N.t("maker.color", { n: i + 1 }) }));
     const keyed = (field, prefix, list) => list.map((v) => ({ value: v, label: I18N.t(`${prefix}.${v}`) }));
     return [
-      { field: "ears", items: keyed("ears", "maker.ears", MyPlush.EARS) },
+      { field: "animal", items: keyed("animal", "maker.animal", MyPlush.animalIds()) },
       { field: "color", items: colors },
       { field: "eyes", items: keyed("eyes", "maker.eyes", MyPlush.EYES) },
       { field: "cheeks", items: [{ value: true, label: I18N.t("maker.cheeks.on") }, { value: false, label: I18N.t("maker.cheeks.off") }] },
@@ -822,6 +822,7 @@
       lbl.textContent = I18N.t(`maker.row.${row.field}`);
       const opts = document.createElement("div");
       opts.className = "opts";
+      opts.dataset.field = row.field;
       for (const it of row.items) {
         const b = document.createElement("button");
         b.type = "button";
@@ -832,12 +833,15 @@
         } else {
           b.textContent = it.label;
         }
+        b.dataset.value = String(it.value);
         b.setAttribute("aria-pressed", maker.draft[row.field] === it.value ? "true" : "false");
         b.addEventListener("click", () => {
           maker.draft = Object.assign({}, maker.draft, { [row.field]: it.value });
+          // 동물을 바꾸면 그 동물다운 색으로 함께 바꾼다 (색은 다시 고를 수 있다)
+          if (row.field === "animal") maker.draft.color = MyPlush.animalColor(it.value);
           maker.bounce = 1;
           AudioFx.tone(600 + Math.random() * 200, 0.08, "triangle", 0.08);
-          for (const sib of opts.children) sib.setAttribute("aria-pressed", sib === b ? "true" : "false");
+          syncMakerPressed();
         });
         opts.appendChild(b);
       }
@@ -847,12 +851,30 @@
     }
   }
 
+  function syncMakerPressed() {
+    for (const opts of makerRows.querySelectorAll(".opts")) {
+      const field = opts.dataset.field;
+      for (const b of opts.children) {
+        b.setAttribute("aria-pressed", b.dataset.value === String(maker.draft[field]) ? "true" : "false");
+      }
+    }
+  }
+
+  // 고른 보기가 가로 목록 안에서 보이게 스크롤한다
+  function scrollMakerToPicked() {
+    for (const opts of makerRows.querySelectorAll(".opts")) {
+      const picked = opts.querySelector('[aria-pressed="true"]');
+      if (picked) opts.scrollLeft = Math.max(0, picked.offsetLeft - opts.clientWidth / 2 + picked.offsetWidth / 2);
+    }
+  }
+
   function openMaker() {
     maker.draft = Object.assign({}, MyPlush.spec || MyPlush.defaults());
     makerName.value = maker.draft.name;
     makerName.placeholder = I18N.t("maker.namePlaceholder");
     document.getElementById("makerTitle").textContent = I18N.t(MyPlush.spec ? "maker.titleEdit" : "maker.title");
     renderMakerRows();
+    requestAnimationFrame(scrollMakerToPicked);
     closeRoom();
     makerOverlay.classList.remove("hidden");
     state.paused = true;
@@ -905,6 +927,7 @@
     maker.draft = MyPlush.random(Math.random, makerName.value);
     maker.bounce = 1;
     renderMakerRows();
+    requestAnimationFrame(scrollMakerToPicked);
     AudioFx.tone(520, 0.1, "triangle", 0.1, 880);
   });
   document.getElementById("makerSave").addEventListener("click", () => {

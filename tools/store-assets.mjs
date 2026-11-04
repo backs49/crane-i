@@ -34,7 +34,7 @@ await page.evaluate(() => {
   const s = JSON.parse(localStorage.getItem("molang-crane:v1"));
   for (const k of ["bear", "bunny", "cat", "chick", "frog", "penguin", "pig", "puppy", "berry", "unicorn"]) s.dexCounts[k] = 2;
   s.tutorialDone = true;
-  s.myPlush = { ears: "long", color: "#7de3b0", eyes: "sparkle", cheeks: true, accessory: "crown", persona: "brave", name: "콩이" };
+  s.myPlush = { animal: "bunny", color: "#7de3b0", eyes: "sparkle", cheeks: true, accessory: "crown", persona: "brave", name: "콩이" };
   s.room = { bunny: { pets: 16 }, cat: { pets: 7 }, bear: { pets: 11 }, mine: { pets: 20 } };
   localStorage.setItem("molang-crane:v1", JSON.stringify(s));
 });
