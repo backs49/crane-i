@@ -195,4 +195,18 @@ const TYPES = ["bear", "bunny", "unicorn"];
   assert.strictEqual(loaded.bestScore, 5);
 }
 
+{
+  // 아이 모드는 기본 켜짐, 끈 선택은 저장과 병합 후에도 유지된다
+  assert.strictEqual(Save.defaults(TYPES).kidMode, true);
+  assert.strictEqual(Save.normalize({}, TYPES).kidMode, true);
+  assert.strictEqual(Save.normalize({ kidMode: false }, TYPES).kidMode, false);
+  const off = Save.setKidMode(Save.defaults(TYPES), false);
+  assert.strictEqual(off.kidMode, false);
+  assert.strictEqual(Save.merge(Save.defaults(TYPES), off).kidMode, false);
+  let disk = null;
+  const mem = { getItem() { return disk; }, setItem(k, v) { disk = v; } };
+  Save.store(mem, off);
+  assert.strictEqual(Save.load(mem, TYPES).kidMode, false);
+}
+
 console.log("save.test.js ok");

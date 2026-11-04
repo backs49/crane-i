@@ -77,6 +77,35 @@
     fingers: [],
   };
 
+  function kidOn() {
+    return state.save.kidMode !== false;
+  }
+
+  function syncKidMode() {
+    const on = kidOn();
+    const btn = document.getElementById("kidBtn");
+    btn.setAttribute("aria-pressed", on ? "true" : "false");
+    btn.textContent = on ? "아이 모드 켜짐 🧸" : "아이 모드 꺼짐";
+    document.getElementById("howGrab").textContent = on
+      ? "집기를 한 번 누르면 집게가 알아서 내려가 잡아요"
+      : "집기 — 바닥에 닿기 전 한 번 더 누르면 닫힘";
+    document.getElementById("howSlip").textContent = on
+      ? "두 번 연속 놓치면 다음엔 집게가 힘을 내요"
+      : "약하게 잡히면 공중에서 미끄러져요. 거의 다 와서 떨어지기도 해요";
+    document.getElementById("titleLead").textContent = on
+      ? "위에서 내려다보는 박스 안에서 인형들이 구릅니다. 집게를 인형 한가운데에 맞출수록 잘 잡혀요. 놓쳐도 괜찮아요, 집게가 금방 힘을 내요!"
+      : "위에서 내려다보는 박스 안에서 인형들이 서로 밀리고 구릅니다. 집게는 일부러 힘이 약해요. 정중앙이어도 들어 올리다 미끄러질 수 있어요.";
+    document.getElementById("hint").textContent = on
+      ? "왼쪽 동그라미로 집게를 옮기고, 집기를 한 번 눌러요"
+      : "방향키 / WASD 로 집게 이동 · 스페이스로 내리고, 한 번 더 누르면 닫아요";
+  }
+
+  function setKidMode(on) {
+    state.save = Save.setKidMode(state.save, on);
+    Save.store(storage, state.save);
+    syncKidMode();
+  }
+
   function clamp(v, a, b) {
     return Math.max(a, Math.min(b, v));
   }
@@ -264,6 +293,7 @@
       y: claw.y,
       bonus,
       pity: state.streak.slips,
+      kid: kidOn(),
     });
     if (!rolled.pity) state.consolation = Fun.consumeBoost(state.consolation);
     if (rolled.kind === "miss") return [];
@@ -617,7 +647,7 @@
     };
     statusEl.textContent = labels[mode] || mode;
     statusEl.classList.toggle("busy", clawBusy() && mode !== "title");
-    grabLabel.textContent = mode === "descending" ? "닫기" : "집기";
+    grabLabel.textContent = mode === "descending" && !kidOn() ? "닫기" : "집기";
     if (mode === "aiming") state.aimTime = 0;
   }
 
@@ -654,8 +684,11 @@
         : state.missionDone
           ? "부탁도 해냈어요"
           : state.prizes === 0
-            ? "집게가 오늘따라 더 약해요"
+            ? kidOn()
+              ? "다음엔 꼭 데려오자!"
+              : "집게가 오늘따라 더 약해요"
             : "오늘 밤의 수확";
+    document.getElementById("overTitle").textContent = kidOn() ? "오늘 데려온 친구들!" : "게임 오버";
     overOverlay.classList.remove("hidden");
   }
 
@@ -763,7 +796,8 @@
 
     if (state.mode === "descending") {
       claw.z = Math.max(0, claw.z - dt * 0.95);
-      const canClose = claw.z <= 0.38;
+      // 아이 모드는 한 번만 누르면 되도록 바닥에 닿을 때 자동으로 닫는다
+      const canClose = claw.z <= 0.38 && !kidOn();
       if ((grab && canClose) || claw.z <= 0) {
         claw.z = Math.max(0, claw.z);
         setMode("closing");
@@ -986,6 +1020,8 @@
   }
 
   document.getElementById("startBtn").addEventListener("click", startGame);
+  document.getElementById("kidBtn").addEventListener("click", () => setKidMode(!kidOn()));
+  syncKidMode();
   document.getElementById("retryBtn").addEventListener("click", startGame);
   let sharing = false;
   document.getElementById("shareBtn").addEventListener("click", async () => {
@@ -1108,6 +1144,8 @@
         aimTime: Math.round(state.aimTime * 10) / 10,
         quickWindow: QUICK.window,
         pityAt: Grip.PITY_AT,
+        kidMode: kidOn(),
+        pityAtNow: Grip.pityAt(kidOn()),
         mission: {
           type: state.mission.type,
           need: state.mission.need,
@@ -1134,6 +1172,7 @@
       Input.grabQueued = true;
     },
     end: endGame,
+    setKidMode,
     wipeSave() {
       Save.wipe(storage);
       state.save = Save.touchDaily(Save.defaults(TYPE_KEYS), Fun.dayKey()).data;

@@ -44,6 +44,9 @@ const PLUSH_TYPES = {
 const GOLDEN = { chance: 0.18, mult: 3 };
 const FEVER = { grabs: 3, bonus: 0.1 };
 const QUICK = { window: 10, points: 30 };
+// 아이 모드: 실패 보정을 앞당기고, 출구 근처 약화와 "거의 다 와서 떨어짐" 편향을 끈다.
+// 정중앙을 맞출수록 잘 잡히도록 coverage 가중치를 키운다.
+const KID = { pityAt: 2, cap: 0.55, coverageGain: 1.5, crowdedMult: 0.75 };
 
 const SPAWN_BAG = [
   "bear",

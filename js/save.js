@@ -27,7 +27,7 @@ const Save = {
   defaults(typeKeys) {
     const dexCounts = Object.create(null);
     for (const t of typeKeys) dexCounts[t] = 0;
-    return { v: 1, bestScore: 0, totalPrizes: 0, totalPlays: 0, dexCounts, daily: this.emptyDaily(""), moonUnlocked: false };
+    return { v: 1, bestScore: 0, totalPrizes: 0, totalPlays: 0, dexCounts, daily: this.emptyDaily(""), moonUnlocked: false, kidMode: true };
   },
 
   normalize(raw, typeKeys) {
@@ -42,6 +42,8 @@ const Save = {
       dexCounts: Object.assign(Object.create(null), base.dexCounts),
       daily: this.emptyDaily(""),
       moonUnlocked: !!raw.moonUnlocked,
+      // 아이 모드는 기본으로 켜져 있고, 끈 기록이 있을 때만 꺼진다
+      kidMode: raw.kidMode !== false,
     };
     if (raw.dexCounts && typeof raw.dexCounts === "object") {
       for (const t of typeKeys) out.dexCounts[t] = num(raw.dexCounts[t]);
@@ -82,6 +84,8 @@ const Save = {
       dexCounts,
       daily,
       moonUnlocked: !!(a.moonUnlocked || b.moonUnlocked),
+      // 설정은 진행도가 아니라 선택이므로 지금 저장하는 쪽(b)을 따른다
+      kidMode: b.kidMode !== false,
     };
   },
 
@@ -141,6 +145,10 @@ const Save = {
 
   dexComplete(data, keys) {
     return keys.every((k) => (data.dexCounts[k] || 0) > 0);
+  },
+
+  setKidMode(data, on) {
+    return Object.assign({}, data, { kidMode: !!on });
   },
 
   unlockMoon(data) {
