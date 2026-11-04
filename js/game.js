@@ -928,7 +928,21 @@
   const talkName = document.getElementById("talkName");
   const talkText = document.getElementById("talkText");
   const talkChoices = document.getElementById("talkChoices");
-  const vil = { open: false, walkers: [], selected: null, fx: [], blink: {}, last: 0, time: 0 };
+  const villageModes = document.getElementById("villageModes");
+  const vil = {
+    open: false,
+    walkers: [],
+    selected: null,
+    fx: [],
+    blink: {},
+    last: 0,
+    time: 0,
+    mode: "free",
+    hide: null,
+    checked: [],
+    snack: null,
+    eaten: {},
+  };
 
   function villageLabels() {
     return {
@@ -962,6 +976,7 @@
 
   function showChoices(w) {
     talkChoices.innerHTML = "";
+    talkChoices.classList.remove("snacks");
     if (!w) return;
     for (const c of Village.CHOICES) {
       const b = document.createElement("button");
@@ -990,22 +1005,188 @@
     showChoices(w);
   }
 
-  function answer(w, choiceId) {
+  // 친밀도를 n만큼 올리고 하트 효과를 보여 준다
+  function befriend(w, n) {
     const before = Room.hearts(w.pets);
-    saveRoom(Room.pet(state.save.room, w.type));
-    w.pets += 1;
-    say(w, Village.reply(w, choiceId));
-    for (let i = 0; i < 3; i++) vil.fx.push({ x: w.x + (i - 1) * 10, y: w.y - 26, vx: (i - 1) * 18, life: 1 });
+    let room = state.save.room;
+    for (let i = 0; i < n; i++) room = Room.pet(room, w.type);
+    saveRoom(room);
+    w.pets += n;
+    for (let i = 0; i < 2 + n; i++) vil.fx.push({ x: w.x + (i - 1) * 10, y: w.y - 26, vx: (i - 1) * 18, life: 1 });
     const after = Room.hearts(w.pets);
     if (after > before) toast(I18N.t("village.heartUp", { name: w.name, n: after }), "win");
     if (navigator.vibrate) navigator.vibrate(12);
   }
 
+  function answer(w, choiceId) {
+    say(w, Village.reply(w, choiceId));
+    befriend(w, 1);
+  }
+
+  function mineWalker() {
+    return vil.walkers.find((w) => w.type === MyPlush.TYPE) || null;
+  }
+
+  function freeTip() {
+    if (!vil.walkers.length) return I18N.t("village.empty");
+    const mine = mineWalker();
+    return mine ? I18N.t("village.tipMine", { name: mine.name }) : I18N.t("village.tip");
+  }
+
   function endTalk() {
-    for (const o of vil.walkers) o.talking = false;
+    for (const o of vil.walkers) if (!o.seat) o.talking = false;
     vil.selected = null;
-    say(null, I18N.t(vil.walkers.length ? "village.tip" : "village.empty"));
+    say(null, freeTip());
     showChoices(null);
+  }
+
+  // ---- 마을 놀이: 숨바꼭질 · 피크닉 ----
+  function modeButton(label, onClick) {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "ghost";
+    b.textContent = label;
+    b.addEventListener("click", onClick);
+    villageModes.appendChild(b);
+  }
+
+  function renderModes() {
+    villageModes.innerHTML = "";
+    if (!vil.walkers.length) return;
+    if (vil.mode === "free") {
+      modeButton(I18N.t("village.mode.hide"), startHide);
+      modeButton(I18N.t("village.mode.picnic"), startPicnic);
+    } else {
+      if (vil.mode === "hide" && vil.hide && vil.hide.found) modeButton(I18N.t("village.mode.again"), startHide);
+      modeButton(I18N.t("village.mode.stop"), stopPlay);
+    }
+  }
+
+  function resetWalkers() {
+    for (const w of vil.walkers) {
+      w.seat = null;
+      w.hidden = false;
+      w.talking = false;
+      w.manual = false;
+    }
+  }
+
+  function stopPlay() {
+    resetWalkers();
+    vil.mode = "free";
+    vil.hide = null;
+    vil.checked = [];
+    vil.snack = null;
+    endTalk();
+    renderModes();
+  }
+
+  function startHide() {
+    if (!vil.walkers.length) return say(null, I18N.t("hide.need"));
+    resetWalkers();
+    vil.mode = "hide";
+    vil.selected = null;
+    vil.checked = [];
+    vil.hide = Village.hideStart(vil.walkers);
+    const hider = vil.walkers.find((w) => w.type === vil.hide.hider);
+    hider.hidden = true;
+    say(null, I18N.t("hide.start", { name: hider.name }));
+    showChoices(null);
+    renderModes();
+  }
+
+  function guessSpot(spot) {
+    if (vil.hide.found) return;
+    const { result, game } = Village.hideGuess(vil.hide, spot.id);
+    vil.hide = game;
+    if (result === "found") {
+      const hider = vil.walkers.find((w) => w.type === game.hider);
+      const at = Village.nearestWalkable(spot.x, spot.y + spot.r) || { x: spot.x, y: spot.y };
+      hider.hidden = false;
+      hider.x = at.x;
+      hider.y = at.y;
+      hider.tx = at.x;
+      hider.ty = at.y;
+      hider.talking = true;
+      vil.selected = hider.type;
+      vil.checked = [];
+      say(hider, I18N.t(`talk.${Village.persona(hider.type)}.found`, { name: hider.name }));
+      befriend(hider, 2);
+      AudioFx.win();
+      renderModes();
+      return;
+    }
+    if (!vil.checked.includes(spot.id)) vil.checked.push(spot.id);
+    AudioFx.tone(300, 0.1, "triangle", 0.08, 220);
+    const line = I18N.pick(result === "near" ? "hide.near" : "hide.miss");
+    say(null, Village.hideHint(game) ? `${line} ${I18N.t("hide.hint")}` : line);
+  }
+
+  function startPicnic() {
+    if (!vil.walkers.length) return say(null, I18N.t("picnic.need"));
+    resetWalkers();
+    vil.mode = "picnic";
+    vil.selected = null;
+    vil.snack = null;
+    vil.eaten = {};
+    const seats = Village.seats(vil.walkers.length);
+    vil.walkers.forEach((w, i) => {
+      w.seat = seats[i];
+    });
+    say(null, I18N.t("picnic.start"));
+    showSnacks();
+    renderModes();
+  }
+
+  function showSnacks() {
+    talkChoices.innerHTML = "";
+    talkChoices.classList.add("snacks");
+    for (const sn of Village.SNACKS) {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.setAttribute("aria-pressed", vil.snack === sn.id ? "true" : "false");
+      const ico = document.createElement("span");
+      ico.className = "ico";
+      ico.textContent = sn.icon;
+      const label = document.createElement("span");
+      label.textContent = I18N.t(`snack.${sn.id}`);
+      b.appendChild(ico);
+      b.appendChild(label);
+      b.addEventListener("click", () => {
+        vil.snack = sn.id;
+        for (const sib of talkChoices.children) sib.setAttribute("aria-pressed", sib === b ? "true" : "false");
+        say(null, I18N.t("picnic.pickFriend", { snack: I18N.t(`snack.${sn.id}`) }));
+      });
+      talkChoices.appendChild(b);
+    }
+  }
+
+  function feedFriend(w) {
+    if (!vil.snack) return say(null, I18N.t("picnic.pickSnack"));
+    const fed = Village.feed(vil.eaten, w.type, vil.snack);
+    vil.eaten = fed.eaten;
+    vil.selected = w.type;
+    say(w, I18N.pick(`picnic.${fed.result}`, { name: w.name }));
+    if (fed.hearts) befriend(w, fed.hearts);
+  }
+
+  function villageTap(x, y) {
+    const w = Village.hit(vil.walkers, x, y);
+    if (vil.mode === "hide") {
+      const spot = Village.spotAt(x, y);
+      if (spot) guessSpot(spot);
+      else if (!vil.hide.found) say(null, I18N.t("hide.tapSpot"));
+      return;
+    }
+    if (vil.mode === "picnic") {
+      if (w && w.talking) feedFriend(w);
+      return;
+    }
+    if (w) return startTalk(w);
+    if (vil.selected) endTalk();
+    // 땅을 누르면 내 인형이 그곳으로 걸어간다 (아이의 분신)
+    const mine = mineWalker();
+    if (mine && Village.goTo(mine, x, y)) vil.fx.push({ x, y, vx: 0, life: 0.6, mark: true });
   }
 
   function openVillage() {
@@ -1016,7 +1197,12 @@
     document.getElementById("villageTitle").textContent = residents.length
       ? I18N.t("village.friends", { n: residents.length })
       : I18N.t("village.title");
+    vil.mode = "free";
+    vil.hide = null;
+    vil.checked = [];
+    vil.snack = null;
     endTalk();
+    renderModes();
     villageOverlay.classList.remove("hidden");
     state.paused = true;
     AudioFx.stopMotor();
@@ -1060,6 +1246,9 @@
       selected: vil.selected,
       fx: vil.fx,
       blink,
+      picnic: vil.mode === "picnic",
+      rustle: vil.mode === "hide" && Village.hideHint(vil.hide) ? vil.hide.spot : null,
+      checked: vil.mode === "hide" ? vil.checked : [],
       labels: villageLabels(),
       emptyText: I18N.t("village.empty"),
     });
@@ -1070,9 +1259,7 @@
     const r = villageCanvas.getBoundingClientRect();
     const x = ((e.clientX - r.left) / r.width) * Village.W;
     const y = ((e.clientY - r.top) / r.height) * Village.H;
-    const w = Village.hit(vil.walkers, x, y);
-    if (w) startTalk(w);
-    else if (vil.selected) endTalk();
+    villageTap(x, y);
   });
   document.getElementById("villageBtn").addEventListener("click", openVillage);
   document.getElementById("villageBackBtn").addEventListener("click", () => {

@@ -1200,3 +1200,41 @@ h1 {
 .maker-dialog .room-name .ghost {
   font-size: 15px;
 }
+
+/* 몰랑 마을 2단계: 놀이 버튼과 간식 */
+.village-modes {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.village-modes:empty {
+  display: none;
+}
+
+.village-modes .ghost {
+  flex: 1;
+  margin-top: 0;
+  padding: 8px 10px;
+  font-size: 16px;
+}
+
+.talk-choices.snacks {
+  grid-template-columns: repeat(5, 1fr);
+  gap: 6px;
+}
+
+.talk-choices.snacks button {
+  font-size: 13px;
+  padding: 6px 2px;
+}
+
+.talk-choices.snacks button .ico {
+  font-size: 22px;
+}
+
+.talk-choices button[aria-pressed="true"] {
+  border-color: var(--neon-lemon);
+  background: rgba(255, 227, 106, 0.18);
+  color: var(--neon-lemon);
+}
