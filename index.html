@@ -177,7 +177,24 @@
           <button type="button" class="ghost" id="roomNameBtn" disabled>이름 짓기</button>
           <button type="button" class="ghost" id="roomPhotoBtn">사진 찍기 📸</button>
         </div>
+        <button type="button" class="ghost" id="villageBtn" data-i18n="village.enter">마을 산책 🌳</button>
         <button type="button" class="primary" id="roomCloseBtn">닫기</button>
+      </div>
+    </div>
+
+    <div class="overlay hidden" id="villageOverlay">
+      <div class="dialog candy village-dialog">
+        <h2 id="villageTitle" data-i18n="village.title">몰랑 마을</h2>
+        <canvas id="villageCanvas" width="720" height="960" aria-label="몰랑 마을"></canvas>
+        <div class="talk" id="talkPanel">
+          <canvas id="talkFace" width="112" height="112" aria-hidden="true"></canvas>
+          <div class="talk-body">
+            <p class="talk-name" id="talkName"></p>
+            <p class="talk-text" id="talkText" aria-live="polite" data-i18n="village.tip">친구를 톡 눌러 말을 걸어 보세요</p>
+          </div>
+        </div>
+        <div class="talk-choices" id="talkChoices"></div>
+        <button type="button" class="primary" id="villageBackBtn" data-i18n="village.back">방으로 돌아가기</button>
       </div>
     </div>
 
@@ -215,11 +232,14 @@
 
     <script src="vendor/matter.min.js"></script>
     <script src="js/config.js"></script>
+    <script src="js/i18n.js"></script>
+    <script src="js/lang/ko.js"></script>
     <script src="js/save.js"></script>
     <script src="js/fun.js"></script>
     <script src="js/grip.js"></script>
     <script src="js/share.js"></script>
     <script src="js/room.js"></script>
+    <script src="js/village.js"></script>
     <script src="js/audio.js"></script>
     <script src="js/particles.js"></script>
     <script src="js/draw.js"></script>

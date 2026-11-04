@@ -996,3 +996,114 @@ h1 {
   font-size: 12px;
   color: var(--lilac);
 }
+
+/* 몰랑 마을 */
+.village-dialog {
+  padding: 14px 16px 16px;
+}
+
+.village-dialog h2 {
+  font-size: 26px;
+  margin: 0 0 8px;
+}
+
+#villageCanvas {
+  display: block;
+  width: min(100%, calc(42dvh * 0.75));
+  height: auto;
+  margin: 0 auto;
+  border-radius: 16px;
+  border: 3px solid #5a2878;
+  touch-action: none;
+}
+
+.talk {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+  padding: 8px 12px;
+  min-height: 72px;
+  text-align: left;
+  background: #fff6fb;
+  border-radius: 18px;
+  color: #3a1230;
+}
+
+.talk canvas {
+  width: 56px;
+  height: 56px;
+  flex: 0 0 56px;
+}
+
+.talk canvas.empty {
+  visibility: hidden;
+  width: 0;
+  flex-basis: 0;
+}
+
+.talk-body {
+  min-width: 0;
+}
+
+.talk-name {
+  margin: 0;
+  font-family: var(--display);
+  font-size: 14px;
+  color: #b0397f;
+}
+
+.talk-text {
+  margin: 2px 0 0;
+  font-size: 16px;
+  line-height: 1.4;
+  color: #3a1230;
+}
+
+.talk.pop {
+  animation: talk-pop 0.22s ease-out;
+}
+
+@keyframes talk-pop {
+  from { transform: scale(0.96); }
+  to { transform: scale(1); }
+}
+
+.talk-choices {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.talk-choices:empty {
+  display: none;
+}
+
+.talk-choices button {
+  border-radius: 16px;
+  padding: 6px 4px;
+  background: rgba(255, 234, 244, 0.1);
+  border: 2px solid rgba(255, 234, 244, 0.4);
+  color: var(--cotton);
+  font-family: var(--display);
+  font-size: 15px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.talk-choices button .ico {
+  font-size: 26px;
+  line-height: 1.1;
+}
+
+.talk-choices button:active {
+  transform: translateY(2px);
+}
+
+#villageOverlay .primary {
+  margin-top: 10px;
+  font-size: 20px;
+}
