@@ -91,7 +91,12 @@ const Village = {
     // 직접 만든 인형은 가끔 "네가 만들어 줘서 기뻐" 같은 특별한 말을 한다
     if (p.type === "mine" && rng() < 0.35) {
       const acc = (typeof MyPlush !== "undefined" && MyPlush.spec && MyPlush.spec.accessory) || "none";
-      return I18N.pick("talk.mine.extra", { name: p.name, thing: I18N.t(`talk.mine.thing.${acc}`) }, rng);
+      const animal = (typeof MyPlush !== "undefined" && MyPlush.spec && MyPlush.spec.animal) || "bear";
+      return I18N.pick(
+        "talk.mine.extra",
+        { name: p.name, thing: I18N.t(`talk.mine.thing.${acc}`), animal: I18N.t(`animal.${animal}`) },
+        rng,
+      );
     }
     if (rng() < 0.3) return I18N.pick(`talk.time.${this.timeOfDay(ctx.hour)}`, vars, rng);
     return I18N.pick(`talk.${this.persona(p.type)}.greet.${this.mood(ctx.hearts)}`, vars, rng);
