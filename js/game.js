@@ -445,7 +445,7 @@
     cctx.scale(2, 2);
     if (secretHidden) {
       cctx.fillStyle = "#cbb6ff";
-      cctx.font = "34px 'Bagel Fat One', 'Jua', sans-serif";
+      cctx.font = "34px 'Jua', sans-serif";
       cctx.textAlign = "center";
       cctx.textBaseline = "middle";
       cctx.fillText("?", 33, 36);
@@ -714,7 +714,7 @@
     g.fillStyle = "#1a0b2c";
     g.fillRect(0, 0, c.width, c.height);
     g.fillStyle = "#ffeaf4";
-    g.font = "44px 'Bagel Fat One', 'Jua', sans-serif";
+    g.font = "44px 'Jua', sans-serif";
     g.textAlign = "center";
     g.fillText("내 인형 방", c.width / 2, 72);
     g.save();

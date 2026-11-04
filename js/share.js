@@ -35,7 +35,7 @@ const Share = {
 
     ctx.textAlign = "center";
     ctx.fillStyle = "#ffeaf4";
-    ctx.font = "64px 'Bagel Fat One', 'Jua', sans-serif";
+    ctx.font = "64px 'Jua', sans-serif";
     ctx.fillText("몰랑크레인", this.W / 2, 112);
     ctx.fillStyle = "#63f0c8";
     ctx.font = "600 20px 'Nunito', sans-serif";
@@ -56,7 +56,7 @@ const Share = {
     ctx.fillText("점수", 210, 272);
     ctx.fillText("인형", 510, 272);
     ctx.fillStyle = "#ffe36a";
-    ctx.font = "68px 'Bagel Fat One', 'Jua', sans-serif";
+    ctx.font = "68px 'Jua', sans-serif";
     ctx.fillText(String(info.score), 210, 356);
     ctx.fillText(String(info.prizes), 510, 356);
 

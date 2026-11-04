@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 
 const CSS_URL =
-  "https://fonts.googleapis.com/css2?family=Bagel+Fat+One&family=Gowun+Dodum&family=Jua&family=Nunito:wght@600;800&display=swap";
+  "https://fonts.googleapis.com/css2?family=Gowun+Dodum&family=Jua&family=Nunito:wght@600;800&display=swap";
 const UA =
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36";
 const outDir = path.join(process.cwd(), "assets", "fonts");
