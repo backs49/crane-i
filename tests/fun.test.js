@@ -191,4 +191,19 @@ function collection() {
   assert.ok(Grip.winChance({ ...farAway, bonus: 1 }) <= 0.36);
 }
 
+{
+  // 놀이 시간: 한도 0이면 꺼짐, 2분 전 경고, 다 쓰면 쉬는 시간, 추가 시간 반영
+  assert.strictEqual(Fun.playStatus(99999, 0, 0).over, false);
+  assert.strictEqual(Fun.playStatus(99999, 0, 0).on, false);
+  const fresh = Fun.playStatus(0, 30, 0);
+  assert.strictEqual(fresh.remain, 1800);
+  assert.strictEqual(fresh.warn, false);
+  assert.strictEqual(Fun.playStatus(1800 - 120, 30, 0).warn, true);
+  assert.strictEqual(Fun.playStatus(1800 - 121, 30, 0).warn, false);
+  assert.strictEqual(Fun.playStatus(1800, 30, 0).over, true);
+  assert.strictEqual(Fun.playStatus(1800, 30, 0).warn, false);
+  assert.strictEqual(Fun.playStatus(1800, 30, 10).over, false);
+  assert.strictEqual(Fun.playStatus(1800, 30, 10).remain, 600);
+}
+
 console.log("fun.test.js ok");

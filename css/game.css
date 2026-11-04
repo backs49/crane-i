@@ -875,3 +875,108 @@ h1 {
   top: max(18px, env(safe-area-inset-top));
   z-index: 40;
 }
+
+/* 첫 플레이 손가락 튜토리얼: 조이스틱을 밀었다가 집기 버튼을 누르는 동작을 반복해 보여 준다 */
+.tutorial {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  pointer-events: none;
+}
+
+.tutorial[hidden] {
+  display: none;
+}
+
+.tut-bubble {
+  position: absolute;
+  left: 50%;
+  top: 30%;
+  transform: translateX(-50%);
+  margin: 0;
+  padding: 8px 14px;
+  border-radius: 16px;
+  background: rgba(20, 8, 28, 0.86);
+  border: 2px solid var(--neon-lemon);
+  color: var(--cream);
+  font-family: var(--display);
+  font-size: 17px;
+  white-space: nowrap;
+  display: grid;
+}
+
+.tut-step {
+  grid-area: 1 / 1;
+  text-align: center;
+}
+
+.tut-move {
+  animation: tut-move-text 3.2s infinite;
+}
+
+.tut-tap {
+  animation: tut-tap-text 3.2s infinite;
+}
+
+.tut-hand {
+  position: absolute;
+  left: 0;
+  top: 0;
+  font-size: 40px;
+  line-height: 1;
+  filter: drop-shadow(0 3px 4px rgba(0, 0, 0, 0.5));
+  animation: tut-hand 3.2s ease-in-out infinite;
+}
+
+@keyframes tut-hand {
+  0% { transform: translate(var(--jx), var(--jy)) scale(1); opacity: 0; }
+  8% { transform: translate(var(--jx), var(--jy)) scale(0.9); opacity: 1; }
+  22% { transform: translate(calc(var(--jx) + 22px), calc(var(--jy) - 18px)) scale(0.9); }
+  36% { transform: translate(calc(var(--jx) - 16px), calc(var(--jy) - 22px)) scale(0.9); }
+  48% { transform: translate(var(--jx), var(--jy)) scale(1); }
+  64% { transform: translate(var(--gx), var(--gy)) scale(1); }
+  72% { transform: translate(var(--gx), var(--gy)) scale(0.78); }
+  80% { transform: translate(var(--gx), var(--gy)) scale(1); opacity: 1; }
+  100% { transform: translate(var(--gx), var(--gy)) scale(1); opacity: 0; }
+}
+
+@keyframes tut-move-text {
+  0%, 52% { opacity: 1; }
+  56%, 100% { opacity: 0; }
+}
+
+@keyframes tut-tap-text {
+  0%, 52% { opacity: 0; }
+  56%, 100% { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tut-hand {
+    animation: none;
+    transform: translate(var(--gx), var(--gy));
+  }
+
+  .tut-move {
+    animation: none;
+    opacity: 1;
+  }
+
+  .tut-tap {
+    animation: none;
+    opacity: 0;
+  }
+}
+
+.gate-choices .primary.picked {
+  outline: 4px solid var(--neon-mint);
+  outline-offset: 2px;
+}
+
+.time-left {
+  color: var(--neon-lemon);
+}
+
+/* 보호자 확인은 쉬는 시간·설정 팝업 위에서도 보여야 한다 */
+#gateOverlay {
+  z-index: 25;
+}

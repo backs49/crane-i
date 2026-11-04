@@ -66,6 +66,10 @@
           <canvas id="game" width="840" height="1000" aria-label="인형뽑기 박스"></canvas>
           <div class="glass" aria-hidden="true"></div>
           <div class="toast" id="toast" hidden></div>
+          <div class="tutorial" id="tutorial" hidden aria-live="polite">
+            <p class="tut-bubble"><span class="tut-step tut-move" id="tutMove">① 동그라미를 밀어 집게를 옮겨요</span><span class="tut-step tut-tap" id="tutTap">② 인형 위에서 집기를 톡!</span></p>
+            <span class="tut-hand" aria-hidden="true">👆</span>
+          </div>
 
           <div class="touch-layer" id="touchLayer">
             <div class="joy-wrap" id="joyWrap">
@@ -119,6 +123,7 @@
         <button type="button" class="primary" id="startBtn">코인 넣기</button>
         <button type="button" class="ghost" id="kidBtn" aria-pressed="true">아이 모드 켜짐 🧸</button>
         <button type="button" class="ghost" id="roomBtn">내 인형 방 🏠</button>
+        <button type="button" class="ghost" id="timeBtn">놀이 시간 30분 ⏰</button>
         <p class="fine" id="titleFine">코인 8개 · 하루 첫 방문 +2 · 오늘의 부탁 완료 시 +2</p>
       </div>
     </div>
@@ -182,6 +187,26 @@
         <p class="lead">밖으로 보내기 전에 어른이 풀어 주세요.</p>
         <div class="gate-choices" id="gateChoices"></div>
         <button type="button" class="ghost" id="gateCancel">취소</button>
+      </div>
+    </div>
+
+    <div class="overlay hidden" id="breakOverlay" role="dialog" aria-modal="true" aria-labelledby="breakTitle">
+      <div class="dialog candy">
+        <p class="eyebrow">쉬는 시간</p>
+        <h2 id="breakTitle">오늘은 여기까지!</h2>
+        <p class="lead" id="breakLead">인형들도 코— 잘 시간이에요. 내일 또 만나요 🌙</p>
+        <button type="button" class="primary" id="breakOkBtn">알겠어요</button>
+        <button type="button" class="ghost" id="breakMoreBtn">어른과 10분 더</button>
+      </div>
+    </div>
+
+    <div class="overlay hidden" id="timeOverlay" role="dialog" aria-modal="true" aria-labelledby="timeTitle">
+      <div class="dialog candy">
+        <p class="eyebrow">보호자 설정</p>
+        <h2 id="timeTitle">하루 놀이 시간</h2>
+        <p class="lead">아이 모드에서 정한 시간이 지나면 쉬는 시간을 알려 줘요.</p>
+        <div class="gate-choices" id="timeChoices"></div>
+        <button type="button" class="ghost" id="timeCloseBtn">닫기</button>
       </div>
     </div>
 

@@ -147,6 +147,16 @@ const Fun = {
     return { type, need, label: `${names} ${need}마리` };
   },
 
+  // 하루 놀이 시간: 한도(분) + 어른이 늘려 준 시간(분) 기준으로 남은 시간과 상태를 계산
+  WARN_SEC: 120,
+
+  playStatus(playSec, limitMin, extraMin) {
+    if (!limitMin) return { on: false, remain: Infinity, over: false, warn: false };
+    const total = (limitMin + (extraMin || 0)) * 60;
+    const remain = Math.max(0, total - (playSec || 0));
+    return { on: true, remain, over: remain <= 0, warn: remain > 0 && remain <= this.WARN_SEC };
+  },
+
   // 보호자 확인: 어린아이는 풀기 어려운 한 자리 곱셈, 보기 4개
   parentQuestion(rng = Math.random) {
     const a = 6 + Math.floor(rng() * 4);

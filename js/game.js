@@ -83,6 +83,7 @@
 
   function syncKidMode() {
     const on = kidOn();
+    syncTimeBtn();
     const btn = document.getElementById("kidBtn");
     btn.setAttribute("aria-pressed", on ? "true" : "false");
     btn.textContent = on ? "아이 모드 켜짐 🧸" : "아이 모드 꺼짐";
@@ -489,7 +490,9 @@
   }
 
   function overlayOpen() {
-    return [dexOverlay, roomOverlay, gateOverlay].some((el) => !el.classList.contains("hidden"));
+    return [dexOverlay, roomOverlay, gateOverlay, breakOverlay, timeOverlay].some(
+      (el) => !el.classList.contains("hidden"),
+    );
   }
 
   // ---- 보호자 확인: 아이 모드에서 밖으로 나가는 동작(공유·도전장·사진) 앞에 둔다 ----
@@ -747,6 +750,168 @@
     if (e.target === roomOverlay) closeRoom();
   });
 
+  // ---- 첫 플레이 손가락 튜토리얼 ----
+  const tutorialEl = document.getElementById("tutorial");
+
+  function tutorialVisible() {
+    return !tutorialEl.hidden;
+  }
+
+  function placeTutorial() {
+    const host = document.getElementById("viewport").getBoundingClientRect();
+    const joy = document.getElementById("joyBase");
+    const grabBtn = document.querySelector("#grabBtn .gumball");
+    const touch = joy.offsetParent !== null;
+    const center = (el) => {
+      const r = el.getBoundingClientRect();
+      return { x: r.left + r.width / 2 - host.left, y: r.top + r.height / 2 - host.top };
+    };
+    const j = touch ? center(joy) : { x: host.width / 2, y: host.height * 0.62 };
+    const g = grabBtn.offsetParent !== null ? center(grabBtn) : j;
+    // 손가락 이모지의 끝이 목표 지점을 가리키도록 살짝 당긴다
+    const hand = (pt, axis) => `${Math.round(pt[axis] - (axis === "x" ? 16 : 4))}px`;
+    tutorialEl.style.setProperty("--jx", hand(j, "x"));
+    tutorialEl.style.setProperty("--jy", hand(j, "y"));
+    tutorialEl.style.setProperty("--gx", hand(g, "x"));
+    tutorialEl.style.setProperty("--gy", hand(g, "y"));
+    document.getElementById("tutMove").textContent = touch
+      ? "① 동그라미를 밀어 집게를 옮겨요"
+      : "① 방향키로 집게를 옮겨요";
+    document.getElementById("tutTap").textContent = touch ? "② 인형 위에서 집기를 톡!" : "② 인형 위에서 스페이스!";
+  }
+
+  function showTutorial() {
+    if (state.save.tutorialDone) return;
+    placeTutorial();
+    tutorialEl.hidden = false;
+  }
+
+  function finishTutorial() {
+    if (!tutorialVisible()) return;
+    tutorialEl.hidden = true;
+    state.save = Save.finishTutorial(state.save);
+    Save.store(storage, state.save);
+  }
+
+  window.addEventListener("resize", () => {
+    if (tutorialVisible()) placeTutorial();
+  });
+
+  // ---- 하루 놀이 시간 알림 (아이 모드) ----
+  const breakOverlay = document.getElementById("breakOverlay");
+  const timeOverlay = document.getElementById("timeOverlay");
+  const timeBtn = document.getElementById("timeBtn");
+  const EXTRA_MIN = 10;
+  const playClock = { pending: 0, warned: false };
+
+  function playStatus() {
+    return Fun.playStatus(
+      (state.save.daily.playSec || 0) + playClock.pending,
+      kidOn() ? state.save.playLimit : 0,
+      state.save.daily.extraMin || 0,
+    );
+  }
+
+  function flushPlayTime() {
+    if (playClock.pending <= 0) return;
+    state.save = Save.addPlayTime(state.save, playClock.pending);
+    playClock.pending = 0;
+    Save.store(storage, state.save);
+  }
+
+  function syncTimeBtn() {
+    timeBtn.hidden = !kidOn();
+    const limit = state.save.playLimit;
+    if (!limit) {
+      timeBtn.textContent = "놀이 시간 알림 끔 ⏰";
+      return;
+    }
+    const st = playStatus();
+    const left = Math.ceil(st.remain / 60);
+    timeBtn.textContent = st.over ? `놀이 시간 ${limit}분 · 오늘은 끝 ⏰` : `놀이 시간 ${limit}분 · ${left}분 남음 ⏰`;
+  }
+
+  function tickPlayTime(dt) {
+    if (state.mode === "title" || state.mode === "gameover") return;
+    playClock.pending += dt;
+    if (playClock.pending >= 5) flushPlayTime();
+    const st = playStatus();
+    if (st.warn && !playClock.warned) {
+      playClock.warned = true;
+      toast(`${Math.ceil(st.remain / 60)}분 뒤에 쉬는 시간이에요`, "win");
+    }
+    if (!st.warn) playClock.warned = false;
+  }
+
+  function breakDue() {
+    return playStatus().over;
+  }
+
+  function showBreak() {
+    flushPlayTime();
+    finishTutorial();
+    const played = Math.round((state.save.daily.playSec || 0) / 60);
+    document.getElementById("breakLead").textContent =
+      `오늘 ${played}분 동안 놀았어요. 인형들도 코— 잘 시간이에요. 내일 또 만나요 🌙`;
+    breakOverlay.classList.remove("hidden");
+    state.paused = true;
+    AudioFx.stopMotor();
+  }
+
+  function hideBreak() {
+    breakOverlay.classList.add("hidden");
+    Input.grabQueued = false;
+    state.paused = document.hidden || overlayOpen();
+  }
+
+  document.getElementById("breakOkBtn").addEventListener("click", () => {
+    hideBreak();
+    endGame();
+    document.getElementById("overEyebrow").textContent = "오늘 놀이 시간 끝!";
+    syncTimeBtn();
+  });
+  document.getElementById("breakMoreBtn").addEventListener("click", async () => {
+    if (!(await parentGate())) return;
+    state.save = Save.addExtraTime(state.save, EXTRA_MIN);
+    Save.store(storage, state.save);
+    hideBreak();
+    syncTimeBtn();
+    toast(`${EXTRA_MIN}분 더 놀아요!`, "win");
+  });
+
+  function openTimeSettings() {
+    const box = document.getElementById("timeChoices");
+    box.innerHTML = "";
+    for (const min of Save.LIMITS) {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "primary" + (state.save.playLimit === min ? " picked" : "");
+      b.textContent = min ? `${min}분` : "끔";
+      b.addEventListener("click", () => {
+        state.save = Save.setPlayLimit(state.save, min);
+        Save.store(storage, state.save);
+        closeTimeSettings();
+        syncTimeBtn();
+        toast(min ? `하루 ${min}분으로 정했어요` : "놀이 시간 알림을 껐어요", "win");
+      });
+      box.appendChild(b);
+    }
+    timeOverlay.classList.remove("hidden");
+    state.paused = true;
+  }
+
+  function closeTimeSettings() {
+    timeOverlay.classList.add("hidden");
+    Input.grabQueued = false;
+    state.paused = document.hidden || overlayOpen();
+  }
+
+  timeBtn.addEventListener("click", async () => {
+    if (!(await parentGate())) return;
+    openTimeSettings();
+  });
+  document.getElementById("timeCloseBtn").addEventListener("click", closeTimeSettings);
+
   function carryProgress() {
     if (state.mode === "ascending") return claw.z * 0.34;
     if (state.mode === "returning") {
@@ -814,10 +979,12 @@
   function ensureToday() {
     const today = Fun.dayKey();
     if (state.save.daily.date === today) return;
+    flushPlayTime();
     state.save = Save.touchDaily(state.save, today).data;
     state.mission = Fun.dailyMission(BASE_TYPE_KEYS, today);
     state.missionDone = !!state.save.daily.missionDone;
     syncKidHud();
+    syncTimeBtn();
   }
 
   function collect(plush) {
@@ -891,7 +1058,7 @@
   let floatToastTimer = 0;
 
   function anyOverlayVisible() {
-    return [titleOverlay, overOverlay, dexOverlay, roomOverlay, gateOverlay].some(
+    return [titleOverlay, overOverlay, dexOverlay, roomOverlay, gateOverlay, breakOverlay, timeOverlay].some(
       (el) => el && !el.classList.contains("hidden"),
     );
   }
@@ -944,6 +1111,8 @@
   }
 
   function endGame() {
+    flushPlayTime();
+    syncTimeBtn();
     detachGrips(true);
     setMode("gameover");
     AudioFx.over();
@@ -1020,6 +1189,8 @@
     state.ignoreGrab = 0.35;
     syncKidHud();
     setMode("aiming");
+    showTutorial();
+    syncTimeBtn();
     if (state.challenge) toast(`친구 기록 ${state.challenge.score}점에 도전!`, "win");
     else if (bonusToast) toast(bonusToast, "win");
   }
@@ -1052,6 +1223,7 @@
     }
     if (state.ignoreGrab > 0) state.ignoreGrab -= dt;
 
+    tickPlayTime(dt);
     const rawGrab = Input.consumeGrab();
     const grab = rawGrab && state.ignoreGrab <= 0;
     const vec = Input.vector();
@@ -1069,7 +1241,11 @@
       state.lastAim.y = claw.y;
       if (vec.mag > 0.08) AudioFx.startMotor();
       else AudioFx.stopMotor();
-      if (grab) spendAndDrop();
+      if (breakDue()) showBreak();
+      else if (grab) {
+        finishTutorial();
+        spendAndDrop();
+      }
     } else {
       AudioFx.stopMotor();
     }
@@ -1431,6 +1607,13 @@
         pityAt: Grip.PITY_AT,
         kidMode: kidOn(),
         pityAtNow: Grip.pityAt(kidOn()),
+        tutorial: tutorialVisible(),
+        play: {
+          sec: Math.round((state.save.daily.playSec || 0) + playClock.pending),
+          limit: state.save.playLimit,
+          extra: state.save.daily.extraMin || 0,
+          breakOpen: !breakOverlay.classList.contains("hidden"),
+        },
         mission: {
           type: state.mission.type,
           need: state.mission.need,
@@ -1462,6 +1645,11 @@
     closeRoom,
     room() {
       return roomResidents().map((p) => ({ type: p.type, x: p.x, y: p.y, name: p.name, pets: p.pets }));
+    },
+    addPlayTime(sec) {
+      state.save = Save.addPlayTime(state.save, sec);
+      Save.store(storage, state.save);
+      syncTimeBtn();
     },
     gateOpen() {
       return !gateOverlay.classList.contains("hidden");

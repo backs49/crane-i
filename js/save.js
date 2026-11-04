@@ -2,7 +2,7 @@ const Save = {
   KEY: "molang-crane:v1",
 
   emptyDaily(dayKey) {
-    return { date: dayKey || "", missionCount: 0, missionDone: false, loginBonus: false };
+    return { date: dayKey || "", missionCount: 0, missionDone: false, loginBonus: false, playSec: 0, extraMin: 0 };
   },
 
   touchDaily(data, dayKey) {
@@ -27,7 +27,7 @@ const Save = {
   defaults(typeKeys) {
     const dexCounts = Object.create(null);
     for (const t of typeKeys) dexCounts[t] = 0;
-    return { v: 1, bestScore: 0, totalPrizes: 0, totalPlays: 0, dexCounts, daily: this.emptyDaily(""), moonUnlocked: false, kidMode: true, room: {} };
+    return { v: 1, bestScore: 0, totalPrizes: 0, totalPlays: 0, dexCounts, daily: this.emptyDaily(""), moonUnlocked: false, kidMode: true, room: {}, playLimit: 30, tutorialDone: false };
   },
 
   normalize(raw, typeKeys) {
@@ -45,6 +45,8 @@ const Save = {
       // 아이 모드는 기본으로 켜져 있고, 끈 기록이 있을 때만 꺼진다
       kidMode: raw.kidMode !== false,
       room: this.normalizeRoom(raw.room, typeKeys),
+      playLimit: this.LIMITS.includes(raw.playLimit) ? raw.playLimit : base.playLimit,
+      tutorialDone: !!raw.tutorialDone,
     };
     if (raw.dexCounts && typeof raw.dexCounts === "object") {
       for (const t of typeKeys) out.dexCounts[t] = num(raw.dexCounts[t]);
@@ -55,6 +57,8 @@ const Save = {
         missionCount: num(raw.daily.missionCount),
         missionDone: !!raw.daily.missionDone,
         loginBonus: !!raw.daily.loginBonus,
+        playSec: Math.min(86400, num(raw.daily.playSec)),
+        extraMin: Math.min(600, num(raw.daily.extraMin)),
       };
     }
     return out;
@@ -72,6 +76,9 @@ const Save = {
         missionCount: Math.max(a.daily.missionCount || 0, b.daily.missionCount || 0),
         missionDone: !!(a.daily.missionDone || b.daily.missionDone),
         loginBonus: !!(a.daily.loginBonus || b.daily.loginBonus),
+        // 여러 탭이 같은 날을 기록해도 놀이 시간이 줄어들지 않도록 큰 쪽
+        playSec: Math.max(a.daily.playSec || 0, b.daily.playSec || 0),
+        extraMin: Math.max(a.daily.extraMin || 0, b.daily.extraMin || 0),
       };
     } else {
       // date는 YYYY-MM-DD라 사전순 비교가 곧 시간순 비교
@@ -88,6 +95,8 @@ const Save = {
       // 설정은 진행도가 아니라 선택이므로 지금 저장하는 쪽(b)을 따른다
       kidMode: b.kidMode !== false,
       room: this.mergeRoom(a.room, b.room),
+      playLimit: b.playLimit != null ? b.playLimit : a.playLimit,
+      tutorialDone: !!(a.tutorialDone || b.tutorialDone),
     };
   },
 
@@ -186,6 +195,27 @@ const Save = {
 
   setRoom(data, room) {
     return Object.assign({}, data, { room });
+  },
+
+  // 하루 놀이 시간 한도(분). 0 = 알림 끔
+  LIMITS: [0, 15, 20, 30, 45, 60],
+
+  addPlayTime(data, sec) {
+    const playSec = Math.min(86400, (data.daily.playSec || 0) + Math.max(0, sec || 0));
+    return Object.assign({}, data, { daily: Object.assign({}, data.daily, { playSec }) });
+  },
+
+  addExtraTime(data, min) {
+    const extraMin = Math.min(600, (data.daily.extraMin || 0) + min);
+    return Object.assign({}, data, { daily: Object.assign({}, data.daily, { extraMin }) });
+  },
+
+  setPlayLimit(data, min) {
+    return Object.assign({}, data, { playLimit: this.LIMITS.includes(min) ? min : data.playLimit });
+  },
+
+  finishTutorial(data) {
+    return Object.assign({}, data, { tutorialDone: true });
   },
 
   setKidMode(data, on) {
