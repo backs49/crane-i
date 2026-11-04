@@ -12,7 +12,7 @@
   --cream: #fff7fb;
   --glass: rgba(255, 236, 248, 0.08);
   --shadow: 0 28px 70px rgba(8, 0, 18, 0.55);
-  --display: "Bagel Fat One", "Jua", sans-serif;
+  --display: "Jua", sans-serif;
   --ui: "Gowun Dodum", "Nunito", sans-serif;
 }
 
@@ -592,11 +592,20 @@ h1 {
   position: fixed;
   inset: 0;
   background: rgba(10, 4, 16, 0.62);
-  display: grid;
-  place-items: center;
+  /* 팝업이 화면보다 길면 스크롤된다. flex + margin: auto라 넘칠 때 위쪽이 잘리지 않는다 */
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
   z-index: 20;
   padding: 18px;
   backdrop-filter: blur(6px);
+}
+
+.overlay > .dialog {
+  margin: auto;
+  flex-shrink: 0;
 }
 
 .overlay.hidden {
@@ -786,4 +795,446 @@ h1 {
   .viewport {
     --play-h: min(52dvh, calc(100dvh - 300px));
   }
+}
+
+/* 내 인형 방 */
+.room-dialog {
+  padding-bottom: 16px;
+}
+
+.room-dialog h2 {
+  font-size: 30px;
+  margin-bottom: 8px;
+}
+
+#roomCanvas {
+  display: block;
+  width: min(100%, calc(46dvh * 0.9));
+  height: auto;
+  margin: 0 auto;
+  border-radius: 16px;
+  border: 3px solid #5a2878;
+  touch-action: none;
+}
+
+.room-tip {
+  margin: 8px 0 0;
+  font-size: 13px;
+  color: var(--lilac);
+}
+
+.room-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.room-actions .ghost {
+  font-size: 16px;
+}
+
+.ghost:disabled {
+  opacity: 0.45;
+}
+
+.room-name {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.room-name[hidden] {
+  display: none;
+}
+
+.room-name input {
+  flex: 1;
+  min-width: 0;
+  border-radius: 999px;
+  border: 2px solid rgba(255, 234, 244, 0.35);
+  background: #140814;
+  color: var(--cream);
+  padding: 8px 14px;
+  font-size: 16px;
+  font-family: inherit;
+}
+
+.room-name .ghost {
+  width: auto;
+  margin-top: 0;
+  padding: 8px 16px;
+  font-size: 16px;
+}
+
+/* 보호자 확인 */
+.gate-choices {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 4px;
+}
+
+.gate-choices .primary {
+  font-size: 26px;
+  padding: 10px;
+}
+
+.toast.float {
+  position: fixed;
+  top: max(18px, env(safe-area-inset-top));
+  z-index: 40;
+}
+
+/* 첫 플레이 손가락 튜토리얼: 조이스틱을 밀었다가 집기 버튼을 누르는 동작을 반복해 보여 준다 */
+.tutorial {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  pointer-events: none;
+}
+
+.tutorial[hidden] {
+  display: none;
+}
+
+.tut-bubble {
+  position: absolute;
+  left: 50%;
+  top: 30%;
+  transform: translateX(-50%);
+  margin: 0;
+  padding: 8px 14px;
+  border-radius: 16px;
+  background: rgba(20, 8, 28, 0.86);
+  border: 2px solid var(--neon-lemon);
+  color: var(--cream);
+  font-family: var(--display);
+  font-size: 17px;
+  white-space: nowrap;
+  display: grid;
+}
+
+.tut-step {
+  grid-area: 1 / 1;
+  text-align: center;
+}
+
+.tut-move {
+  animation: tut-move-text 3.2s infinite;
+}
+
+.tut-tap {
+  animation: tut-tap-text 3.2s infinite;
+}
+
+.tut-hand {
+  position: absolute;
+  left: 0;
+  top: 0;
+  font-size: 40px;
+  line-height: 1;
+  filter: drop-shadow(0 3px 4px rgba(0, 0, 0, 0.5));
+  animation: tut-hand 3.2s ease-in-out infinite;
+}
+
+@keyframes tut-hand {
+  0% { transform: translate(var(--jx), var(--jy)) scale(1); opacity: 0; }
+  8% { transform: translate(var(--jx), var(--jy)) scale(0.9); opacity: 1; }
+  22% { transform: translate(calc(var(--jx) + 22px), calc(var(--jy) - 18px)) scale(0.9); }
+  36% { transform: translate(calc(var(--jx) - 16px), calc(var(--jy) - 22px)) scale(0.9); }
+  48% { transform: translate(var(--jx), var(--jy)) scale(1); }
+  64% { transform: translate(var(--gx), var(--gy)) scale(1); }
+  72% { transform: translate(var(--gx), var(--gy)) scale(0.78); }
+  80% { transform: translate(var(--gx), var(--gy)) scale(1); opacity: 1; }
+  100% { transform: translate(var(--gx), var(--gy)) scale(1); opacity: 0; }
+}
+
+@keyframes tut-move-text {
+  0%, 52% { opacity: 1; }
+  56%, 100% { opacity: 0; }
+}
+
+@keyframes tut-tap-text {
+  0%, 52% { opacity: 0; }
+  56%, 100% { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tut-hand {
+    animation: none;
+    transform: translate(var(--gx), var(--gy));
+  }
+
+  .tut-move {
+    animation: none;
+    opacity: 1;
+  }
+
+  .tut-tap {
+    animation: none;
+    opacity: 0;
+  }
+}
+
+.gate-choices .primary.picked {
+  outline: 4px solid var(--neon-mint);
+  outline-offset: 2px;
+}
+
+.time-left {
+  color: var(--neon-lemon);
+}
+
+/* 보호자 확인은 쉬는 시간·설정 팝업 위에서도 보여야 한다 */
+#gateOverlay {
+  z-index: 25;
+}
+
+.fine-link {
+  display: inline-block;
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--lilac);
+}
+
+/* 몰랑 마을 */
+.village-dialog {
+  padding: 14px 16px 16px;
+}
+
+.village-dialog h2 {
+  font-size: 26px;
+  margin: 0 0 8px;
+}
+
+#villageCanvas {
+  display: block;
+  width: min(100%, calc(42dvh * 0.75));
+  height: auto;
+  margin: 0 auto;
+  border-radius: 16px;
+  border: 3px solid #5a2878;
+  touch-action: none;
+}
+
+.talk {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+  padding: 8px 12px;
+  min-height: 72px;
+  text-align: left;
+  background: #fff6fb;
+  border-radius: 18px;
+  color: #3a1230;
+}
+
+.talk canvas {
+  width: 56px;
+  height: 56px;
+  flex: 0 0 56px;
+}
+
+.talk canvas.empty {
+  visibility: hidden;
+  width: 0;
+  flex-basis: 0;
+}
+
+.talk-body {
+  min-width: 0;
+}
+
+.talk-name {
+  margin: 0;
+  font-family: var(--display);
+  font-size: 14px;
+  color: #b0397f;
+}
+
+.talk-text {
+  margin: 2px 0 0;
+  font-size: 16px;
+  line-height: 1.4;
+  color: #3a1230;
+}
+
+.talk.pop {
+  animation: talk-pop 0.22s ease-out;
+}
+
+@keyframes talk-pop {
+  from { transform: scale(0.96); }
+  to { transform: scale(1); }
+}
+
+.talk-choices {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.talk-choices:empty {
+  display: none;
+}
+
+.talk-choices button {
+  border-radius: 16px;
+  padding: 6px 4px;
+  background: rgba(255, 234, 244, 0.1);
+  border: 2px solid rgba(255, 234, 244, 0.4);
+  color: var(--cotton);
+  font-family: var(--display);
+  font-size: 15px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.talk-choices button .ico {
+  font-size: 26px;
+  line-height: 1.1;
+}
+
+.talk-choices button:active {
+  transform: translateY(2px);
+}
+
+#villageOverlay .primary {
+  margin-top: 10px;
+  font-size: 20px;
+}
+
+/* 나만의 애착 인형 만들기 */
+.room-actions {
+  grid-template-columns: 1fr 1fr;
+}
+
+.room-actions .ghost {
+  margin-top: 8px;
+}
+
+.maker-dialog {
+  padding: 14px 16px 16px;
+}
+
+.maker-dialog h2 {
+  font-size: 26px;
+  margin: 0 0 6px;
+}
+
+#makerCanvas {
+  display: block;
+  width: min(42vw, 22dvh, 160px);
+  height: auto;
+  margin: 0 auto 4px;
+}
+
+.maker-rows {
+  display: grid;
+  gap: 6px;
+  text-align: left;
+}
+
+.maker-row {
+  display: grid;
+  grid-template-columns: 38px 1fr;
+  align-items: center;
+  gap: 6px;
+}
+
+.maker-row .lbl {
+  font-family: var(--display);
+  font-size: 14px;
+  color: var(--lilac);
+}
+
+.maker-row .opts {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding: 2px 2px 4px;
+  touch-action: pan-x;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+}
+
+.maker-row .opts::-webkit-scrollbar {
+  display: none;
+}
+
+.maker-row button {
+  flex: 0 0 auto;
+  border-radius: 999px;
+  padding: 6px 10px;
+  font-family: var(--display);
+  font-size: 14px;
+  color: var(--cotton);
+  background: rgba(255, 234, 244, 0.08);
+  border: 2px solid rgba(255, 234, 244, 0.3);
+  white-space: nowrap;
+}
+
+.maker-row button[aria-pressed="true"] {
+  border-color: var(--neon-lemon);
+  background: rgba(255, 227, 106, 0.18);
+  color: var(--neon-lemon);
+}
+
+.maker-row button.swatch {
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  background: var(--c);
+}
+
+.maker-row button.swatch[aria-pressed="true"] {
+  outline: 3px solid var(--neon-lemon);
+  outline-offset: 2px;
+  background: var(--c);
+}
+
+.maker-dialog .room-name .ghost {
+  font-size: 15px;
+}
+
+/* 몰랑 마을 2단계: 놀이 버튼과 간식 */
+.village-modes {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.village-modes:empty {
+  display: none;
+}
+
+.village-modes .ghost {
+  flex: 1;
+  margin-top: 0;
+  padding: 8px 10px;
+  font-size: 16px;
+}
+
+.talk-choices.snacks {
+  grid-template-columns: repeat(5, 1fr);
+  gap: 6px;
+}
+
+.talk-choices.snacks button {
+  font-size: 13px;
+  padding: 6px 2px;
+}
+
+.talk-choices.snacks button .ico {
+  font-size: 22px;
+}
+
+.talk-choices button[aria-pressed="true"] {
+  border-color: var(--neon-lemon);
+  background: rgba(255, 227, 106, 0.18);
+  color: var(--neon-lemon);
 }

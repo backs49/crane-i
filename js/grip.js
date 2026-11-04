@@ -1,6 +1,14 @@
 const Grip = {
   PITY_AT: 4,
 
+  _kid() {
+    return typeof KID !== "undefined" ? KID : { pityAt: 2, cap: 0.55, coverageGain: 1.5, crowdedMult: 0.75 };
+  },
+
+  pityAt(kid) {
+    return kid ? this._kid().pityAt : this.PITY_AT;
+  },
+
   coverage(dist, radius) {
     return Math.max(0, Math.min(1, (16 + radius * 0.55 - dist) / (radius * 0.95)));
   },
@@ -25,23 +33,25 @@ const Grip = {
     return 0.55 + away * 0.5;
   },
 
-  winChance({ coverage, crowded, radius, points, x, y, bonus } = {}) {
+  winChance({ coverage, crowded, radius, points, x, y, bonus, kid } = {}) {
     const power = typeof CLAW_POWER === "number" ? CLAW_POWER : 0.42;
-    let p = 0.05 + coverage * (0.18 + power * 0.2);
-    if (crowded) p *= 0.48;
+    const k = this._kid();
+    let p = 0.05 + coverage * (0.18 + power * 0.2) * (kid ? k.coverageGain : 1);
+    if (crowded) p *= kid ? k.crowdedMult : 0.48;
     if (radius >= 26) p *= 0.82;
     if (points >= 250) p *= 0.75;
-    if (x != null && y != null) p *= this.locationFactor(x, y);
+    if (!kid && x != null && y != null) p *= this.locationFactor(x, y);
     if (bonus) p += bonus;
-    return Math.max(0.03, Math.min(0.36, p));
+    return Math.max(0.03, Math.min(kid ? k.cap : 0.36, p));
   },
 
   roll(opts, rng = Math.random) {
     const coverage = opts.coverage;
     const pWin = this.winChance(opts);
     const r = rng();
-    const loc = opts.x != null ? this.locationFactor(opts.x, opts.y) : 1;
-    const prox = opts.x != null ? this.chuteProximity(opts.x, opts.y) : 0;
+    const kid = !!opts.kid;
+    const loc = !kid && opts.x != null ? this.locationFactor(opts.x, opts.y) : 1;
+    const prox = !kid && opts.x != null ? this.chuteProximity(opts.x, opts.y) : 0;
 
     let lateBand = 0.17;
     let midBand = 0.43;
@@ -62,7 +72,7 @@ const Grip = {
       };
     }
 
-    if ((opts.pity || 0) >= this.PITY_AT && coverage >= 0.3) {
+    if ((opts.pity || 0) >= this.pityAt(kid) && coverage >= 0.3) {
       return {
         kind: "hold",
         pity: true,

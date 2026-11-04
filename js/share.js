@@ -35,7 +35,7 @@ const Share = {
 
     ctx.textAlign = "center";
     ctx.fillStyle = "#ffeaf4";
-    ctx.font = "64px 'Bagel Fat One', 'Jua', sans-serif";
+    ctx.font = "64px 'Jua', sans-serif";
     ctx.fillText("몰랑크레인", this.W / 2, 112);
     ctx.fillStyle = "#63f0c8";
     ctx.font = "600 20px 'Nunito', sans-serif";
@@ -56,7 +56,7 @@ const Share = {
     ctx.fillText("점수", 210, 272);
     ctx.fillText("인형", 510, 272);
     ctx.fillStyle = "#ffe36a";
-    ctx.font = "68px 'Bagel Fat One', 'Jua', sans-serif";
+    ctx.font = "68px 'Jua', sans-serif";
     ctx.fillText(String(info.score), 210, 356);
     ctx.fillText(String(info.prizes), 510, 356);
 
@@ -97,12 +97,49 @@ const Share = {
   },
 
   async share(info) {
-    const canvas = this.card(info);
+    const text = `몰랑크레인에서 ${info.score}점! 인형 ${info.prizes}개를 데려왔어요`;
+    return this.shareCanvas(this.card(info), text, "molang-crane.png");
+  },
+
+  // 안드로이드 앱(Capacitor) 안에서는 웹 공유가 없으므로 기기 공유 창을 쓴다
+  native() {
+    const P = typeof window !== "undefined" && window.Capacitor && window.Capacitor.Plugins;
+    return P && P.Share && P.Filesystem ? P : null;
+  },
+
+  async shareNative(P, canvas, text, filename) {
+    try {
+      const data = canvas.toDataURL("image/png").split(",")[1];
+      const file = await P.Filesystem.writeFile({ path: filename, data, directory: "CACHE" });
+      await P.Share.share({ title: "몰랑크레인", text, files: [file.uri] });
+      return "shared";
+    } catch (err) {
+      const msg = String((err && (err.message || err.errorMessage)) || err);
+      return /cancel/i.test(msg) ? "cancelled" : "fail";
+    }
+  },
+
+  async shareText(title, text, url) {
+    const P = this.native();
+    if (P) {
+      try {
+        await P.Share.share({ title, text, url });
+        return "shared";
+      } catch (err) {
+        const msg = String((err && (err.message || err.errorMessage)) || err);
+        return /cancel/i.test(msg) ? "cancelled" : "fail";
+      }
+    }
+    return null;
+  },
+
+  async shareCanvas(canvas, text, filename) {
+    const P = this.native();
+    if (P) return this.shareNative(P, canvas, text, filename);
     const blob = await new Promise((res) => canvas.toBlob(res, "image/png"));
     if (!blob) return "fail";
-    const text = `몰랑크레인에서 ${info.score}점! 인형 ${info.prizes}개를 데려왔어요`;
     if (typeof File !== "undefined" && navigator.canShare) {
-      const file = new File([blob], "molang-crane.png", { type: "image/png" });
+      const file = new File([blob], filename, { type: "image/png" });
       if (navigator.canShare({ files: [file] })) {
         try {
           await navigator.share({ files: [file], title: "몰랑크레인", text });
@@ -123,7 +160,7 @@ const Share = {
     }
     const a = document.createElement("a");
     a.href = canvas.toDataURL("image/png");
-    a.download = "molang-crane.png";
+    a.download = filename;
     a.click();
     return "downloaded";
   },

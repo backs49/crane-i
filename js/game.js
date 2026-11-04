@@ -20,7 +20,8 @@
   const dexGrid = document.getElementById("dexGrid");
   const dexTitle = document.getElementById("dexTitle");
   const TYPE_KEYS = Object.keys(PLUSH_TYPES);
-  const BASE_TYPE_KEYS = TYPE_KEYS.filter((k) => PLUSH_TYPES[k].rarity !== "secret");
+  // 도감 완성 조건에는 비밀 인형(달토끼)과 직접 만든 인형을 넣지 않는다
+  const BASE_TYPE_KEYS = TYPE_KEYS.filter((k) => !["secret", "mine"].includes(PLUSH_TYPES[k].rarity));
   const storage = (() => { try { return window.localStorage; } catch (_) { return null; } })();
 
   const engine = Engine.create({
@@ -61,6 +62,16 @@
   };
 
   state.missionDone = !!state.save.daily.missionDone;
+  MyPlush.spec = state.save.myPlush;
+
+  // 직접 만든 인형은 만들기 전에는 도감·방 어디에도 보이지 않는다
+  function typeVisible(type) {
+    return type !== MyPlush.TYPE || !!MyPlush.spec;
+  }
+
+  function plushName(type) {
+    return type === MyPlush.TYPE && MyPlush.spec ? MyPlush.spec.name : PLUSH_TYPES[type].name;
+  }
 
   if (state.challenge) {
     const vsBanner = document.getElementById("vsBanner");
@@ -76,6 +87,36 @@
     hub: null,
     fingers: [],
   };
+
+  function kidOn() {
+    return state.save.kidMode !== false;
+  }
+
+  function syncKidMode() {
+    const on = kidOn();
+    syncTimeBtn();
+    const btn = document.getElementById("kidBtn");
+    btn.setAttribute("aria-pressed", on ? "true" : "false");
+    btn.textContent = on ? "아이 모드 켜짐 🧸" : "아이 모드 꺼짐";
+    document.getElementById("howGrab").textContent = on
+      ? "집기를 한 번 누르면 집게가 알아서 내려가 잡아요"
+      : "집기 — 바닥에 닿기 전 한 번 더 누르면 닫힘";
+    document.getElementById("howSlip").textContent = on
+      ? "두 번 연속 놓치면 다음엔 집게가 힘을 내요"
+      : "약하게 잡히면 공중에서 미끄러져요. 거의 다 와서 떨어지기도 해요";
+    document.getElementById("titleLead").textContent = on
+      ? "위에서 내려다보는 박스 안에서 인형들이 구릅니다. 집게를 인형 한가운데에 맞출수록 잘 잡혀요. 놓쳐도 괜찮아요, 집게가 금방 힘을 내요!"
+      : "위에서 내려다보는 박스 안에서 인형들이 서로 밀리고 구릅니다. 집게는 일부러 힘이 약해요. 정중앙이어도 들어 올리다 미끄러질 수 있어요.";
+    document.getElementById("hint").textContent = on
+      ? "왼쪽 동그라미로 집게를 옮기고, 집기를 한 번 눌러요"
+      : "방향키 / WASD 로 집게 이동 · 스페이스로 내리고, 한 번 더 누르면 닫아요";
+  }
+
+  function setKidMode(on) {
+    state.save = Save.setKidMode(state.save, on);
+    Save.store(storage, state.save);
+    syncKidMode();
+  }
 
   function clamp(v, a, b) {
     return Math.max(a, Math.min(b, v));
@@ -146,7 +187,8 @@
     });
     return {
       type,
-      name: spec.name,
+      name: plushName(type),
+      mineMark: type === MyPlush.TYPE,
       points: spec.points,
       radius: spec.radius,
       body,
@@ -165,7 +207,9 @@
   function fillBox(bag) {
     state.plushes = state.plushes.filter((p) => !p.collected);
     const born = [];
-    const full = state.save.moonUnlocked ? bag.concat(["moonbunny", "moonbunny"]) : bag;
+    let full = state.save.moonUnlocked ? bag.concat(["moonbunny", "moonbunny"]) : bag;
+    const mineIn = !!MyPlush.spec && Math.random() < MINE.chance;
+    if (mineIn) full = full.concat([MyPlush.TYPE]);
     for (const type of full) {
       const p = createPlush(type, spawnPos());
       state.plushes.push(p);
@@ -181,6 +225,11 @@
           if (state.mode !== "title" && state.mode !== "gameover") toast("황금 인형 등장!", "win");
         }, 1400);
       }
+    }
+    if (mineIn && state.mode !== "title") {
+      setTimeout(() => {
+        if (state.mode !== "title" && state.mode !== "gameover") toast(I18N.t("mine.inBox", { name: MyPlush.spec.name }), "win");
+      }, 2800);
     }
     for (let i = 0; i < 120; i++) Engine.update(engine, 1000 / 60);
   }
@@ -264,6 +313,7 @@
       y: claw.y,
       bonus,
       pity: state.streak.slips,
+      kid: kidOn(),
     });
     if (!rolled.pity) state.consolation = Fun.consumeBoost(state.consolation);
     if (rolled.kind === "miss") return [];
@@ -390,13 +440,14 @@
     scrapBar.textContent = `♥ ${state.consolation.scraps}`;
     dexBar.innerHTML = "";
     for (const type of TYPE_KEYS) {
+      if (!typeVisible(type)) continue;
       const dot = document.createElement("span");
       const spec = PLUSH_TYPES[type];
       const n = state.save.dexCounts[type] || 0;
       const hidden = spec.rarity === "secret" && !n;
       dot.className = "dex-dot" + (n ? " on" : "") + (hidden ? " secret" : "");
       dot.style.setProperty("--c", spec.color);
-      dot.title = hidden ? "???" : `${spec.name} ${n}`;
+      dot.title = hidden ? "???" : `${plushName(type)} ${n}`;
       dexBar.appendChild(dot);
     }
   }
@@ -414,7 +465,7 @@
     cctx.scale(2, 2);
     if (secretHidden) {
       cctx.fillStyle = "#cbb6ff";
-      cctx.font = "34px 'Bagel Fat One', 'Jua', sans-serif";
+      cctx.font = "34px 'Jua', sans-serif";
       cctx.textAlign = "center";
       cctx.textBaseline = "middle";
       cctx.fillText("?", 33, 36);
@@ -429,7 +480,7 @@
     }
     const name = document.createElement("span");
     name.className = "dex-name";
-    name.textContent = secretHidden ? "???" : spec.name;
+    name.textContent = secretHidden ? "???" : plushName(type);
     const count = document.createElement("span");
     count.className = "dex-count";
     count.textContent = n ? `×${n}` : "미발견";
@@ -441,7 +492,7 @@
 
   function openDex() {
     dexGrid.innerHTML = "";
-    for (const type of TYPE_KEYS) dexGrid.appendChild(dexCard(type));
+    for (const type of TYPE_KEYS) if (typeVisible(type)) dexGrid.appendChild(dexCard(type));
     const baseCaught = BASE_TYPE_KEYS.filter((k) => (state.save.dexCounts[k] || 0) > 0).length;
     const moonCaught = TYPE_KEYS.some(
       (k) => PLUSH_TYPES[k].rarity === "secret" && (state.save.dexCounts[k] || 0) > 0,
@@ -455,8 +506,931 @@
   function closeDex() {
     dexOverlay.classList.add("hidden");
     Input.grabQueued = false;
-    state.paused = document.hidden;
+    state.paused = document.hidden || overlayOpen();
   }
+
+  function overlayOpen() {
+    return [dexOverlay, roomOverlay, villageOverlay, makerOverlay, gateOverlay, breakOverlay, timeOverlay].some(
+      (el) => !el.classList.contains("hidden"),
+    );
+  }
+
+  // ---- 보호자 확인: 아이 모드에서 밖으로 나가는 동작(공유·도전장·사진) 앞에 둔다 ----
+  const gateOverlay = document.getElementById("gateOverlay");
+  const gateQ = document.getElementById("gateQ");
+  const gateChoices = document.getElementById("gateChoices");
+  const GATE_LOCK = 15;
+  let gateLockUntil = 0;
+  let gateResolve = null;
+
+  function finishGate(ok) {
+    gateOverlay.classList.add("hidden");
+    Input.grabQueued = false;
+    state.paused = document.hidden || overlayOpen();
+    const done = gateResolve;
+    gateResolve = null;
+    if (done) done(ok);
+  }
+
+  function parentGate() {
+    if (!kidOn()) return Promise.resolve(true);
+    const wait = Math.ceil((gateLockUntil - performance.now()) / 1000);
+    if (wait > 0) {
+      toast(`${wait}초 뒤에 어른과 함께 다시 해요`, "fail");
+      return Promise.resolve(false);
+    }
+    if (gateResolve) finishGate(false);
+    const q = Fun.parentQuestion();
+    gateQ.textContent = q.label;
+    gateChoices.innerHTML = "";
+    for (const v of q.choices) {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "primary";
+      b.textContent = String(v);
+      b.addEventListener("click", () => {
+        const ok = Fun.checkParent(q, v);
+        if (!ok) {
+          gateLockUntil = performance.now() + GATE_LOCK * 1000;
+          toast("어른에게 부탁해요!", "fail");
+        }
+        finishGate(ok);
+      });
+      gateChoices.appendChild(b);
+    }
+    gateOverlay.classList.remove("hidden");
+    state.paused = true;
+    AudioFx.stopMotor();
+    return new Promise((res) => {
+      gateResolve = res;
+    });
+  }
+
+  document.getElementById("gateCancel").addEventListener("click", () => finishGate(false));
+
+  // ---- 내 인형 방 ----
+  const roomOverlay = document.getElementById("roomOverlay");
+  const roomCanvas = document.getElementById("roomCanvas");
+  const roomCtx = roomCanvas.getContext("2d");
+  const roomNameBtn = document.getElementById("roomNameBtn");
+  const roomNameRow = document.getElementById("roomNameRow");
+  const roomNameInput = document.getElementById("roomNameInput");
+  const roomUi = { open: false, list: [], anim: {}, fx: [], selected: null, drag: null, last: 0, time: 0 };
+
+  // 직접 만든 인형은 뽑지 않아도 처음부터 방에 산다
+  function roomResidents() {
+    const names = Object.fromEntries(TYPE_KEYS.map((k) => [k, plushName(k)]));
+    const dex = Object.assign({}, state.save.dexCounts);
+    if (MyPlush.spec) dex[MyPlush.TYPE] = Math.max(1, dex[MyPlush.TYPE] || 0);
+    else delete dex[MyPlush.TYPE];
+    return Room.residents(dex, state.save.room, TYPE_KEYS, names);
+  }
+
+  function saveRoom(room) {
+    state.save = Save.setRoom(state.save, room);
+    Save.store(storage, state.save);
+    roomUi.list = roomResidents();
+  }
+
+  function selectResident(type) {
+    roomUi.selected = type;
+    roomNameBtn.disabled = !type;
+    if (!type) roomNameRow.hidden = true;
+  }
+
+  function openRoom() {
+    roomUi.list = roomResidents();
+    document.getElementById("makerBtn").textContent = I18N.t(MyPlush.spec ? "maker.openEdit" : "maker.open");
+    roomUi.anim = {};
+    roomUi.fx = [];
+    selectResident(null);
+    document.getElementById("roomTitle").textContent = roomUi.list.length
+      ? `내 인형 방 · 친구 ${roomUi.list.length}`
+      : "내 인형 방";
+    roomOverlay.classList.remove("hidden");
+    state.paused = true;
+    AudioFx.stopMotor();
+    if (!roomUi.open) {
+      roomUi.open = true;
+      roomUi.last = performance.now();
+      requestAnimationFrame(roomFrame);
+    }
+  }
+
+  function closeRoom() {
+    roomOverlay.classList.add("hidden");
+    roomUi.open = false;
+    roomUi.drag = null;
+    roomNameRow.hidden = true;
+    Input.grabQueued = false;
+    state.paused = document.hidden || overlayOpen();
+  }
+
+  function roomFrame(now) {
+    if (!roomUi.open) return;
+    const dt = Math.min(0.05, (now - roomUi.last) / 1000);
+    roomUi.last = now;
+    roomUi.time += dt;
+    for (const k of Object.keys(roomUi.anim)) {
+      const a = roomUi.anim[k];
+      a.bounce = Math.max(0, (a.bounce || 0) - dt * 1.4);
+    }
+    for (const p of roomUi.list) {
+      const a = roomUi.anim[p.type] || (roomUi.anim[p.type] = {});
+      a.blinkT = (a.blinkT == null ? 1 + Math.random() * 3 : a.blinkT) - dt;
+      a.blink = a.blinkT < 0.12 && a.blinkT > 0 ? 0.1 : 1;
+      if (a.blinkT <= 0) a.blinkT = 2 + Math.random() * 3;
+    }
+    roomUi.fx = roomUi.fx.filter((f) => (f.life -= dt * 1.1) > 0);
+    for (const f of roomUi.fx) {
+      f.y -= dt * 40;
+      f.x += f.vx * dt;
+    }
+    roomCtx.setTransform(roomCanvas.width / Room.W, 0, 0, roomCanvas.height / Room.H, 0, 0);
+    Room.paint(roomCtx, roomUi.list, {
+      time: roomUi.time,
+      anim: roomUi.anim,
+      fx: roomUi.fx,
+      selected: roomUi.selected,
+      dragging: roomUi.drag && roomUi.drag.moved ? roomUi.drag.type : null,
+    });
+    requestAnimationFrame(roomFrame);
+  }
+
+  function roomPoint(e) {
+    const r = roomCanvas.getBoundingClientRect();
+    return { x: ((e.clientX - r.left) / r.width) * Room.W, y: ((e.clientY - r.top) / r.height) * Room.H };
+  }
+
+  function petResident(type) {
+    const p = roomUi.list.find((q) => q.type === type);
+    if (!p) return;
+    const before = Room.hearts(p.pets);
+    saveRoom(Room.pet(state.save.room, type));
+    const a = roomUi.anim[type] || (roomUi.anim[type] = {});
+    a.bounce = 1;
+    for (let i = 0; i < 3; i++) roomUi.fx.push({ x: p.x + (i - 1) * 10, y: p.y - 26, vx: (i - 1) * 18, life: 1 });
+    const petFreq = 660 + Math.random() * 180;
+    AudioFx.tone(petFreq, 0.12, "sine", 0.12, petFreq * 1.4);
+    const after = Room.hearts(p.pets + 1);
+    if (after > before) toast(I18N.t("village.heartUp", { name: p.name, n: after }), "win");
+    if (navigator.vibrate) navigator.vibrate(12);
+  }
+
+  roomCanvas.addEventListener("pointerdown", (e) => {
+    const pt = roomPoint(e);
+    const p = Room.hit(roomUi.list, pt.x, pt.y);
+    if (!p) {
+      selectResident(null);
+      return;
+    }
+    roomCanvas.setPointerCapture(e.pointerId);
+    roomUi.drag = { type: p.type, id: e.pointerId, sx: pt.x, sy: pt.y, ox: p.x - pt.x, oy: p.y - pt.y, moved: false };
+    selectResident(p.type);
+  });
+  roomCanvas.addEventListener("pointermove", (e) => {
+    const d = roomUi.drag;
+    if (!d || d.id !== e.pointerId) return;
+    const pt = roomPoint(e);
+    if (!d.moved && Math.hypot(pt.x - d.sx, pt.y - d.sy) < 8) return;
+    d.moved = true;
+    const p = roomUi.list.find((q) => q.type === d.type);
+    const pos = Room.clampPos(pt.x + d.ox, pt.y + d.oy);
+    p.x = pos.x;
+    p.y = pos.y;
+  });
+  const endRoomDrag = (e) => {
+    const d = roomUi.drag;
+    if (!d || d.id !== e.pointerId) return;
+    roomUi.drag = null;
+    if (d.moved) {
+      const p = roomUi.list.find((q) => q.type === d.type);
+      saveRoom(Room.move(state.save.room, d.type, p.x, p.y));
+    } else if (e.type === "pointerup") {
+      petResident(d.type);
+    }
+  };
+  roomCanvas.addEventListener("pointerup", endRoomDrag);
+  roomCanvas.addEventListener("pointercancel", endRoomDrag);
+
+  roomNameBtn.addEventListener("click", () => {
+    if (!roomUi.selected) return;
+    const p = roomUi.list.find((q) => q.type === roomUi.selected);
+    roomNameRow.hidden = false;
+    roomNameInput.value = p ? p.name : "";
+    roomNameInput.focus();
+  });
+  const commitName = () => {
+    if (!roomUi.selected) return;
+    if (roomUi.selected === MyPlush.TYPE && MyPlush.spec) {
+      // 내 인형의 이름은 만들기 정보에 함께 저장한다
+      const name = MyPlush.cleanName(roomNameInput.value) || MyPlush.spec.name;
+      saveMyPlush(Object.assign({}, MyPlush.spec, { name }));
+    } else {
+      saveRoom(Room.rename(state.save.room, roomUi.selected, roomNameInput.value));
+    }
+    roomNameRow.hidden = true;
+    roomNameInput.blur();
+    toast("이름을 지었어요!", "win");
+  };
+  document.getElementById("roomNameSave").addEventListener("click", commitName);
+  roomNameInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") commitName();
+  });
+
+  function roomPhoto() {
+    const c = document.createElement("canvas");
+    c.width = Room.W * 2;
+    c.height = Room.H * 2 + 120;
+    const g = c.getContext("2d");
+    g.fillStyle = "#1a0b2c";
+    g.fillRect(0, 0, c.width, c.height);
+    g.fillStyle = "#ffeaf4";
+    g.font = "44px 'Jua', sans-serif";
+    g.textAlign = "center";
+    g.fillText("내 인형 방", c.width / 2, 72);
+    g.save();
+    g.translate(0, 100);
+    g.scale(2, 2);
+    Room.paint(g, roomUi.list, { time: roomUi.time, anim: {} });
+    g.restore();
+    return c;
+  }
+
+  let photographing = false;
+  document.getElementById("roomPhotoBtn").addEventListener("click", async () => {
+    if (photographing) return;
+    if (!roomUi.list.length) {
+      toast("먼저 인형을 데려와요!", "fail");
+      return;
+    }
+    photographing = true;
+    try {
+      if (!(await parentGate())) return;
+      const result = await Share.shareCanvas(roomPhoto(), "몰랑크레인 내 인형 방 🧸", "molang-room.png");
+      if (result === "cancelled") return;
+      const msgs = { shared: "공유 완료!", copied: "사진이 복사됐어요", downloaded: "사진을 저장했어요", fail: "사진 저장에 실패했어요…" };
+      toast(msgs[result] || msgs.fail, result === "fail" ? "fail" : "win");
+    } finally {
+      photographing = false;
+    }
+  });
+  document.getElementById("roomCloseBtn").addEventListener("click", closeRoom);
+  document.getElementById("roomBtn").addEventListener("click", openRoom);
+  document.getElementById("overRoomBtn").addEventListener("click", openRoom);
+  roomOverlay.addEventListener("click", (e) => {
+    if (e.target === roomOverlay) closeRoom();
+  });
+
+  // ---- 나만의 애착 인형 만들기 ----
+  const makerOverlay = document.getElementById("makerOverlay");
+  const makerCanvas = document.getElementById("makerCanvas");
+  const makerRows = document.getElementById("makerRows");
+  const makerName = document.getElementById("makerName");
+  const maker = { open: false, draft: null, time: 0, last: 0, bounce: 0 };
+
+  function saveMyPlush(spec) {
+    const fresh = !MyPlush.spec;
+    state.save = Save.setMyPlush(state.save, spec);
+    MyPlush.spec = state.save.myPlush;
+    Save.store(storage, state.save);
+    roomUi.list = roomResidents();
+    syncKidHud();
+    return fresh;
+  }
+
+  function makerOptions() {
+    const colors = MyPlush.COLORS.map((c, i) => ({ value: c, swatch: c, label: I18N.t("maker.color", { n: i + 1 }) }));
+    const keyed = (field, prefix, list) => list.map((v) => ({ value: v, label: I18N.t(`${prefix}.${v}`) }));
+    return [
+      { field: "ears", items: keyed("ears", "maker.ears", MyPlush.EARS) },
+      { field: "color", items: colors },
+      { field: "eyes", items: keyed("eyes", "maker.eyes", MyPlush.EYES) },
+      { field: "cheeks", items: [{ value: true, label: I18N.t("maker.cheeks.on") }, { value: false, label: I18N.t("maker.cheeks.off") }] },
+      { field: "accessory", items: keyed("accessory", "maker.acc", MyPlush.ACCESSORIES) },
+      { field: "persona", items: MyPlush.PERSONAS.map((v) => ({ value: v, label: I18N.t(`persona.${v}`) })) },
+    ];
+  }
+
+  function renderMakerRows() {
+    makerRows.innerHTML = "";
+    for (const row of makerOptions()) {
+      const wrap = document.createElement("div");
+      wrap.className = "maker-row";
+      const lbl = document.createElement("span");
+      lbl.className = "lbl";
+      lbl.textContent = I18N.t(`maker.row.${row.field}`);
+      const opts = document.createElement("div");
+      opts.className = "opts";
+      for (const it of row.items) {
+        const b = document.createElement("button");
+        b.type = "button";
+        if (it.swatch) {
+          b.className = "swatch";
+          b.style.setProperty("--c", it.swatch);
+          b.setAttribute("aria-label", it.label);
+        } else {
+          b.textContent = it.label;
+        }
+        b.setAttribute("aria-pressed", maker.draft[row.field] === it.value ? "true" : "false");
+        b.addEventListener("click", () => {
+          maker.draft = Object.assign({}, maker.draft, { [row.field]: it.value });
+          maker.bounce = 1;
+          AudioFx.tone(600 + Math.random() * 200, 0.08, "triangle", 0.08);
+          for (const sib of opts.children) sib.setAttribute("aria-pressed", sib === b ? "true" : "false");
+        });
+        opts.appendChild(b);
+      }
+      wrap.appendChild(lbl);
+      wrap.appendChild(opts);
+      makerRows.appendChild(wrap);
+    }
+  }
+
+  function openMaker() {
+    maker.draft = Object.assign({}, MyPlush.spec || MyPlush.defaults());
+    makerName.value = maker.draft.name;
+    makerName.placeholder = I18N.t("maker.namePlaceholder");
+    document.getElementById("makerTitle").textContent = I18N.t(MyPlush.spec ? "maker.titleEdit" : "maker.title");
+    renderMakerRows();
+    closeRoom();
+    makerOverlay.classList.remove("hidden");
+    state.paused = true;
+    AudioFx.stopMotor();
+    if (!maker.open) {
+      maker.open = true;
+      maker.last = performance.now();
+      requestAnimationFrame(makerFrame);
+    }
+  }
+
+  function closeMaker(backToRoom) {
+    makerOverlay.classList.add("hidden");
+    maker.open = false;
+    Input.grabQueued = false;
+    state.paused = document.hidden || overlayOpen();
+    if (backToRoom) openRoom();
+  }
+
+  function makerFrame(now) {
+    if (!maker.open) return;
+    const dt = Math.min(0.05, (now - maker.last) / 1000);
+    maker.last = now;
+    maker.time += dt;
+    maker.bounce = Math.max(0, maker.bounce - dt * 1.6);
+    const g = makerCanvas.getContext("2d");
+    g.setTransform(1, 0, 0, 1, 0, 0);
+    g.clearRect(0, 0, makerCanvas.width, makerCanvas.height);
+    g.setTransform(makerCanvas.width / 160, 0, 0, makerCanvas.height / 160, 0, 0);
+    const blinkPhase = maker.time % 3.2;
+    const b = Math.sin(maker.bounce * Math.PI * 3) * maker.bounce;
+    Draw.plush(g, {
+      type: MyPlush.TYPE,
+      spec: maker.draft,
+      x: 80,
+      y: 92 - Math.abs(b) * 10,
+      radius: 46,
+      angle: Math.sin(maker.time * 1.4) * 0.05,
+      liftZ: 0,
+      blink: blinkPhase > 3.05 ? 0.1 : 1,
+      react: "idle",
+      squashX: b * 0.08,
+      squashY: -b * 0.1,
+    });
+    requestAnimationFrame(makerFrame);
+  }
+
+  document.getElementById("makerBtn").addEventListener("click", openMaker);
+  document.getElementById("makerDice").addEventListener("click", () => {
+    maker.draft = MyPlush.random(Math.random, makerName.value);
+    maker.bounce = 1;
+    renderMakerRows();
+    AudioFx.tone(520, 0.1, "triangle", 0.1, 880);
+  });
+  document.getElementById("makerSave").addEventListener("click", () => {
+    const name = MyPlush.cleanName(makerName.value) || MyPlush.defaults().name;
+    const fresh = saveMyPlush(Object.assign({}, maker.draft, { name }));
+    AudioFx.win();
+    closeMaker(true);
+    toast(I18N.t(fresh ? "maker.born" : "maker.updated", { name }), "win");
+  });
+  document.getElementById("makerClose").addEventListener("click", () => closeMaker(true));
+  makerOverlay.addEventListener("click", (e) => {
+    if (e.target === makerOverlay) closeMaker(true);
+  });
+
+  // ---- 몰랑 마을: 인형들이 돌아다니고, 톡 누르면 대화한다 ----
+  const villageOverlay = document.getElementById("villageOverlay");
+  const villageCanvas = document.getElementById("villageCanvas");
+  const villageCtx = villageCanvas.getContext("2d");
+  const talkPanel = document.getElementById("talkPanel");
+  const talkFace = document.getElementById("talkFace");
+  const talkName = document.getElementById("talkName");
+  const talkText = document.getElementById("talkText");
+  const talkChoices = document.getElementById("talkChoices");
+  const villageModes = document.getElementById("villageModes");
+  const vil = {
+    open: false,
+    walkers: [],
+    selected: null,
+    fx: [],
+    blink: {},
+    last: 0,
+    time: 0,
+    mode: "free",
+    hide: null,
+    checked: [],
+    snack: null,
+    eaten: {},
+  };
+
+  function villageLabels() {
+    return {
+      flowers: I18N.t("village.place.flowers"),
+      pond: I18N.t("village.place.pond"),
+      slide: I18N.t("village.place.slide"),
+    };
+  }
+
+  function say(w, text) {
+    talkName.textContent = w ? `${I18N.t("persona." + Village.persona(w.type))} ${w.name}` : "";
+    talkText.textContent = text;
+    talkFace.classList.toggle("empty", !w);
+    if (w) {
+      const g = talkFace.getContext("2d");
+      g.setTransform(1, 0, 0, 1, 0, 0);
+      g.clearRect(0, 0, talkFace.width, talkFace.height);
+      g.setTransform(2, 0, 0, 2, 0, 0);
+      Draw.plush(g, { type: w.type, x: 28, y: 30, radius: 22, angle: 0, liftZ: 0, blink: 1, react: "success" });
+    }
+    talkPanel.classList.remove("pop");
+    void talkPanel.offsetWidth;
+    talkPanel.classList.add("pop");
+    if (w) {
+      // 말할 때 짧은 옹알이 소리
+      for (let i = 0; i < 3; i++) {
+        setTimeout(() => AudioFx.tone(520 + Math.random() * 260, 0.06, "triangle", 0.07), i * 70);
+      }
+    }
+  }
+
+  function showChoices(w) {
+    talkChoices.innerHTML = "";
+    talkChoices.classList.remove("snacks");
+    if (!w) return;
+    for (const c of Village.CHOICES) {
+      const b = document.createElement("button");
+      b.type = "button";
+      const ico = document.createElement("span");
+      ico.className = "ico";
+      ico.textContent = c.icon;
+      const label = document.createElement("span");
+      label.textContent = I18N.t(`village.choice.${c.id}`);
+      b.appendChild(ico);
+      b.appendChild(label);
+      b.addEventListener("click", () => answer(w, c.id));
+      talkChoices.appendChild(b);
+    }
+  }
+
+  function talkContext(w) {
+    return { hour: new Date().getHours(), missionType: state.mission.type, hearts: Room.hearts(w.pets) };
+  }
+
+  function startTalk(w) {
+    for (const o of vil.walkers) o.talking = false;
+    w.talking = true;
+    vil.selected = w.type;
+    say(w, Village.greet(w, talkContext(w)));
+    showChoices(w);
+  }
+
+  // 친밀도를 n만큼 올리고 하트 효과를 보여 준다
+  function befriend(w, n) {
+    const before = Room.hearts(w.pets);
+    let room = state.save.room;
+    for (let i = 0; i < n; i++) room = Room.pet(room, w.type);
+    saveRoom(room);
+    w.pets += n;
+    for (let i = 0; i < 2 + n; i++) vil.fx.push({ x: w.x + (i - 1) * 10, y: w.y - 26, vx: (i - 1) * 18, life: 1 });
+    const after = Room.hearts(w.pets);
+    if (after > before) toast(I18N.t("village.heartUp", { name: w.name, n: after }), "win");
+    if (navigator.vibrate) navigator.vibrate(12);
+  }
+
+  function answer(w, choiceId) {
+    say(w, Village.reply(w, choiceId));
+    befriend(w, 1);
+  }
+
+  function mineWalker() {
+    return vil.walkers.find((w) => w.type === MyPlush.TYPE) || null;
+  }
+
+  function freeTip() {
+    if (!vil.walkers.length) return I18N.t("village.empty");
+    const mine = mineWalker();
+    return mine ? I18N.t("village.tipMine", { name: mine.name }) : I18N.t("village.tip");
+  }
+
+  function endTalk() {
+    for (const o of vil.walkers) if (!o.seat) o.talking = false;
+    vil.selected = null;
+    say(null, freeTip());
+    showChoices(null);
+  }
+
+  // ---- 마을 놀이: 숨바꼭질 · 피크닉 ----
+  function modeButton(label, onClick) {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "ghost";
+    b.textContent = label;
+    b.addEventListener("click", onClick);
+    villageModes.appendChild(b);
+  }
+
+  function renderModes() {
+    villageModes.innerHTML = "";
+    if (!vil.walkers.length) return;
+    if (vil.mode === "free") {
+      modeButton(I18N.t("village.mode.hide"), startHide);
+      modeButton(I18N.t("village.mode.picnic"), startPicnic);
+    } else {
+      if (vil.mode === "hide" && vil.hide && vil.hide.found) modeButton(I18N.t("village.mode.again"), startHide);
+      modeButton(I18N.t("village.mode.stop"), stopPlay);
+    }
+  }
+
+  function resetWalkers() {
+    for (const w of vil.walkers) {
+      w.seat = null;
+      w.hidden = false;
+      w.talking = false;
+      w.manual = false;
+    }
+  }
+
+  function stopPlay() {
+    resetWalkers();
+    vil.mode = "free";
+    vil.hide = null;
+    vil.checked = [];
+    vil.snack = null;
+    endTalk();
+    renderModes();
+  }
+
+  function startHide() {
+    if (!vil.walkers.length) return say(null, I18N.t("hide.need"));
+    resetWalkers();
+    vil.mode = "hide";
+    vil.selected = null;
+    vil.checked = [];
+    vil.hide = Village.hideStart(vil.walkers);
+    const hider = vil.walkers.find((w) => w.type === vil.hide.hider);
+    hider.hidden = true;
+    say(null, I18N.t("hide.start", { name: hider.name }));
+    showChoices(null);
+    renderModes();
+  }
+
+  function guessSpot(spot) {
+    if (vil.hide.found) return;
+    const { result, game } = Village.hideGuess(vil.hide, spot.id);
+    vil.hide = game;
+    if (result === "found") {
+      const hider = vil.walkers.find((w) => w.type === game.hider);
+      const at = Village.nearestWalkable(spot.x, spot.y + spot.r) || { x: spot.x, y: spot.y };
+      hider.hidden = false;
+      hider.x = at.x;
+      hider.y = at.y;
+      hider.tx = at.x;
+      hider.ty = at.y;
+      hider.talking = true;
+      vil.selected = hider.type;
+      vil.checked = [];
+      say(hider, I18N.t(`talk.${Village.persona(hider.type)}.found`, { name: hider.name }));
+      befriend(hider, 2);
+      AudioFx.win();
+      renderModes();
+      return;
+    }
+    if (!vil.checked.includes(spot.id)) vil.checked.push(spot.id);
+    AudioFx.tone(300, 0.1, "triangle", 0.08, 220);
+    const line = I18N.pick(result === "near" ? "hide.near" : "hide.miss");
+    say(null, Village.hideHint(game) ? `${line} ${I18N.t("hide.hint")}` : line);
+  }
+
+  function startPicnic() {
+    if (!vil.walkers.length) return say(null, I18N.t("picnic.need"));
+    resetWalkers();
+    vil.mode = "picnic";
+    vil.selected = null;
+    vil.snack = null;
+    vil.eaten = {};
+    const seats = Village.seats(vil.walkers.length);
+    vil.walkers.forEach((w, i) => {
+      w.seat = seats[i];
+    });
+    say(null, I18N.t("picnic.start"));
+    showSnacks();
+    renderModes();
+  }
+
+  function showSnacks() {
+    talkChoices.innerHTML = "";
+    talkChoices.classList.add("snacks");
+    for (const sn of Village.SNACKS) {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.setAttribute("aria-pressed", vil.snack === sn.id ? "true" : "false");
+      const ico = document.createElement("span");
+      ico.className = "ico";
+      ico.textContent = sn.icon;
+      const label = document.createElement("span");
+      label.textContent = I18N.t(`snack.${sn.id}`);
+      b.appendChild(ico);
+      b.appendChild(label);
+      b.addEventListener("click", () => {
+        vil.snack = sn.id;
+        for (const sib of talkChoices.children) sib.setAttribute("aria-pressed", sib === b ? "true" : "false");
+        say(null, I18N.t("picnic.pickFriend", { snack: I18N.t(`snack.${sn.id}`) }));
+      });
+      talkChoices.appendChild(b);
+    }
+  }
+
+  function feedFriend(w) {
+    if (!vil.snack) return say(null, I18N.t("picnic.pickSnack"));
+    const fed = Village.feed(vil.eaten, w.type, vil.snack);
+    vil.eaten = fed.eaten;
+    vil.selected = w.type;
+    say(w, I18N.pick(`picnic.${fed.result}`, { name: w.name }));
+    if (fed.hearts) befriend(w, fed.hearts);
+  }
+
+  function villageTap(x, y) {
+    const w = Village.hit(vil.walkers, x, y);
+    if (vil.mode === "hide") {
+      const spot = Village.spotAt(x, y);
+      if (spot) guessSpot(spot);
+      else if (!vil.hide.found) say(null, I18N.t("hide.tapSpot"));
+      return;
+    }
+    if (vil.mode === "picnic") {
+      if (w && w.talking) feedFriend(w);
+      return;
+    }
+    if (w) return startTalk(w);
+    if (vil.selected) endTalk();
+    // 땅을 누르면 내 인형이 그곳으로 걸어간다 (아이의 분신)
+    const mine = mineWalker();
+    if (mine && Village.goTo(mine, x, y)) vil.fx.push({ x, y, vx: 0, life: 0.6, mark: true });
+  }
+
+  function openVillage() {
+    const residents = roomResidents();
+    closeRoom();
+    vil.walkers = Village.spawn(residents);
+    vil.fx = [];
+    document.getElementById("villageTitle").textContent = residents.length
+      ? I18N.t("village.friends", { n: residents.length })
+      : I18N.t("village.title");
+    vil.mode = "free";
+    vil.hide = null;
+    vil.checked = [];
+    vil.snack = null;
+    endTalk();
+    renderModes();
+    villageOverlay.classList.remove("hidden");
+    state.paused = true;
+    AudioFx.stopMotor();
+    if (!vil.open) {
+      vil.open = true;
+      vil.last = performance.now();
+      requestAnimationFrame(villageFrame);
+    }
+  }
+
+  function closeVillage() {
+    villageOverlay.classList.add("hidden");
+    vil.open = false;
+    Input.grabQueued = false;
+    state.paused = document.hidden || overlayOpen();
+  }
+
+  function villageFrame(now) {
+    if (!vil.open) return;
+    const dt = Math.min(0.05, (now - vil.last) / 1000);
+    vil.last = now;
+    vil.time += dt;
+    Village.step(vil.walkers, dt);
+    for (const w of vil.walkers) {
+      const b = (vil.blink[w.type] = vil.blink[w.type] || { t: 1 + Math.random() * 3 });
+      b.t -= dt;
+      b.v = b.t < 0.12 && b.t > 0 ? 0.1 : 1;
+      if (b.t <= 0) b.t = 2 + Math.random() * 3;
+    }
+    vil.fx = vil.fx.filter((f) => (f.life -= dt * 1.1) > 0);
+    for (const f of vil.fx) {
+      f.y -= dt * 40;
+      f.x += f.vx * dt;
+    }
+    const blink = {};
+    for (const k of Object.keys(vil.blink)) blink[k] = vil.blink[k].v;
+    villageCtx.setTransform(villageCanvas.width / Village.W, 0, 0, villageCanvas.height / Village.H, 0, 0);
+    Village.paint(villageCtx, vil.walkers, {
+      tod: Village.timeOfDay(new Date().getHours()),
+      time: vil.time,
+      selected: vil.selected,
+      fx: vil.fx,
+      blink,
+      picnic: vil.mode === "picnic",
+      rustle: vil.mode === "hide" && Village.hideHint(vil.hide) ? vil.hide.spot : null,
+      checked: vil.mode === "hide" ? vil.checked : [],
+      labels: villageLabels(),
+      emptyText: I18N.t("village.empty"),
+    });
+    requestAnimationFrame(villageFrame);
+  }
+
+  villageCanvas.addEventListener("pointerdown", (e) => {
+    const r = villageCanvas.getBoundingClientRect();
+    const x = ((e.clientX - r.left) / r.width) * Village.W;
+    const y = ((e.clientY - r.top) / r.height) * Village.H;
+    villageTap(x, y);
+  });
+  document.getElementById("villageBtn").addEventListener("click", openVillage);
+  document.getElementById("villageBackBtn").addEventListener("click", () => {
+    closeVillage();
+    openRoom();
+  });
+  villageOverlay.addEventListener("click", (e) => {
+    if (e.target === villageOverlay) closeVillage();
+  });
+
+  // ---- 첫 플레이 손가락 튜토리얼 ----
+  const tutorialEl = document.getElementById("tutorial");
+
+  function tutorialVisible() {
+    return !tutorialEl.hidden;
+  }
+
+  function placeTutorial() {
+    const host = document.getElementById("viewport").getBoundingClientRect();
+    const joy = document.getElementById("joyBase");
+    const grabBtn = document.querySelector("#grabBtn .gumball");
+    const touch = joy.offsetParent !== null;
+    const center = (el) => {
+      const r = el.getBoundingClientRect();
+      return { x: r.left + r.width / 2 - host.left, y: r.top + r.height / 2 - host.top };
+    };
+    const j = touch ? center(joy) : { x: host.width / 2, y: host.height * 0.62 };
+    const g = grabBtn.offsetParent !== null ? center(grabBtn) : j;
+    // 손가락 이모지의 끝이 목표 지점을 가리키도록 살짝 당긴다
+    const hand = (pt, axis) => `${Math.round(pt[axis] - (axis === "x" ? 16 : 4))}px`;
+    tutorialEl.style.setProperty("--jx", hand(j, "x"));
+    tutorialEl.style.setProperty("--jy", hand(j, "y"));
+    tutorialEl.style.setProperty("--gx", hand(g, "x"));
+    tutorialEl.style.setProperty("--gy", hand(g, "y"));
+    document.getElementById("tutMove").textContent = touch
+      ? "① 동그라미를 밀어 집게를 옮겨요"
+      : "① 방향키로 집게를 옮겨요";
+    document.getElementById("tutTap").textContent = touch ? "② 인형 위에서 집기를 톡!" : "② 인형 위에서 스페이스!";
+  }
+
+  function showTutorial() {
+    if (state.save.tutorialDone) return;
+    placeTutorial();
+    tutorialEl.hidden = false;
+  }
+
+  function finishTutorial() {
+    if (!tutorialVisible()) return;
+    tutorialEl.hidden = true;
+    state.save = Save.finishTutorial(state.save);
+    Save.store(storage, state.save);
+  }
+
+  window.addEventListener("resize", () => {
+    if (tutorialVisible()) placeTutorial();
+  });
+
+  // ---- 하루 놀이 시간 알림 (아이 모드) ----
+  const breakOverlay = document.getElementById("breakOverlay");
+  const timeOverlay = document.getElementById("timeOverlay");
+  const timeBtn = document.getElementById("timeBtn");
+  const EXTRA_MIN = 10;
+  const playClock = { pending: 0, warned: false };
+
+  function playStatus() {
+    return Fun.playStatus(
+      (state.save.daily.playSec || 0) + playClock.pending,
+      kidOn() ? state.save.playLimit : 0,
+      state.save.daily.extraMin || 0,
+    );
+  }
+
+  function flushPlayTime() {
+    if (playClock.pending <= 0) return;
+    state.save = Save.addPlayTime(state.save, playClock.pending);
+    playClock.pending = 0;
+    Save.store(storage, state.save);
+  }
+
+  function syncTimeBtn() {
+    timeBtn.hidden = !kidOn();
+    const limit = state.save.playLimit;
+    if (!limit) {
+      timeBtn.textContent = "놀이 시간 알림 끔 ⏰";
+      return;
+    }
+    const st = playStatus();
+    const left = Math.ceil(st.remain / 60);
+    timeBtn.textContent = st.over ? `놀이 시간 ${limit}분 · 오늘은 끝 ⏰` : `놀이 시간 ${limit}분 · ${left}분 남음 ⏰`;
+  }
+
+  function tickPlayTime(dt) {
+    if (state.mode === "title" || state.mode === "gameover") return;
+    playClock.pending += dt;
+    if (playClock.pending >= 5) flushPlayTime();
+    const st = playStatus();
+    if (st.warn && !playClock.warned) {
+      playClock.warned = true;
+      toast(`${Math.ceil(st.remain / 60)}분 뒤에 쉬는 시간이에요`, "win");
+    }
+    if (!st.warn) playClock.warned = false;
+  }
+
+  function breakDue() {
+    return playStatus().over;
+  }
+
+  function showBreak() {
+    flushPlayTime();
+    finishTutorial();
+    const played = Math.round((state.save.daily.playSec || 0) / 60);
+    document.getElementById("breakLead").textContent =
+      `오늘 ${played}분 동안 놀았어요. 인형들도 코— 잘 시간이에요. 내일 또 만나요 🌙`;
+    breakOverlay.classList.remove("hidden");
+    state.paused = true;
+    AudioFx.stopMotor();
+  }
+
+  function hideBreak() {
+    breakOverlay.classList.add("hidden");
+    Input.grabQueued = false;
+    state.paused = document.hidden || overlayOpen();
+  }
+
+  document.getElementById("breakOkBtn").addEventListener("click", () => {
+    hideBreak();
+    endGame();
+    document.getElementById("overEyebrow").textContent = "오늘 놀이 시간 끝!";
+    syncTimeBtn();
+  });
+  document.getElementById("breakMoreBtn").addEventListener("click", async () => {
+    if (!(await parentGate())) return;
+    state.save = Save.addExtraTime(state.save, EXTRA_MIN);
+    Save.store(storage, state.save);
+    hideBreak();
+    syncTimeBtn();
+    toast(`${EXTRA_MIN}분 더 놀아요!`, "win");
+  });
+
+  function openTimeSettings() {
+    const box = document.getElementById("timeChoices");
+    box.innerHTML = "";
+    for (const min of Save.LIMITS) {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "primary" + (state.save.playLimit === min ? " picked" : "");
+      b.textContent = min ? `${min}분` : "끔";
+      b.addEventListener("click", () => {
+        state.save = Save.setPlayLimit(state.save, min);
+        Save.store(storage, state.save);
+        closeTimeSettings();
+        syncTimeBtn();
+        toast(min ? `하루 ${min}분으로 정했어요` : "놀이 시간 알림을 껐어요", "win");
+      });
+      box.appendChild(b);
+    }
+    timeOverlay.classList.remove("hidden");
+    state.paused = true;
+  }
+
+  function closeTimeSettings() {
+    timeOverlay.classList.add("hidden");
+    Input.grabQueued = false;
+    state.paused = document.hidden || overlayOpen();
+  }
+
+  timeBtn.addEventListener("click", async () => {
+    if (!(await parentGate())) return;
+    openTimeSettings();
+  });
+  document.getElementById("timeCloseBtn").addEventListener("click", closeTimeSettings);
 
   function carryProgress() {
     if (state.mode === "ascending") return claw.z * 0.34;
@@ -525,10 +1499,12 @@
   function ensureToday() {
     const today = Fun.dayKey();
     if (state.save.daily.date === today) return;
+    flushPlayTime();
     state.save = Save.touchDaily(state.save, today).data;
     state.mission = Fun.dailyMission(BASE_TYPE_KEYS, today);
     state.missionDone = !!state.save.daily.missionDone;
     syncKidHud();
+    syncTimeBtn();
   }
 
   function collect(plush) {
@@ -551,6 +1527,10 @@
     const juice = Math.round(42 * Fun.juiceScale(state.streak));
     Particles.emit(CHUTE.x, CHUTE.y, plush.golden ? "gold" : "win", juice);
     let msg = plush.golden ? `황금 ${plush.name} +${plush.points}` : `${plush.name} +${plush.points}`;
+    if (plush.type === MyPlush.TYPE) {
+      msg = I18N.t("mine.caught", { name: plush.name, points: plush.points });
+      Particles.emit(CHUTE.x, CHUTE.y, "gold", 50);
+    }
     if (!state.missionDone && plush.type === state.mission.type) {
       state.save = Save.noteMissionCatch(state.save);
       if (state.save.daily.missionCount >= state.mission.need) {
@@ -596,7 +1576,28 @@
     prizeRail.appendChild(c);
   }
 
+  // 팝업이 열려 있으면 게임 화면 안 토스트가 가려지므로 화면 맨 위에 띄운다.
+  // 팝업 중에는 게임 루프가 멈춰 있어 타이머도 따로 돈다.
+  const floatToastEl = document.getElementById("floatToast");
+  let floatToastTimer = 0;
+
+  function anyOverlayVisible() {
+    return [titleOverlay, overOverlay, dexOverlay, roomOverlay, villageOverlay, makerOverlay, gateOverlay, breakOverlay, timeOverlay].some(
+      (el) => el && !el.classList.contains("hidden"),
+    );
+  }
+
   function toast(msg, kind) {
+    if (anyOverlayVisible()) {
+      floatToastEl.hidden = false;
+      floatToastEl.textContent = msg;
+      floatToastEl.className = `toast float ${kind || ""}`;
+      clearTimeout(floatToastTimer);
+      floatToastTimer = setTimeout(() => {
+        floatToastEl.hidden = true;
+      }, 1600);
+      return;
+    }
     toastEl.hidden = false;
     toastEl.textContent = msg;
     toastEl.className = `toast ${kind || ""}`;
@@ -617,7 +1618,7 @@
     };
     statusEl.textContent = labels[mode] || mode;
     statusEl.classList.toggle("busy", clawBusy() && mode !== "title");
-    grabLabel.textContent = mode === "descending" ? "닫기" : "집기";
+    grabLabel.textContent = mode === "descending" && !kidOn() ? "닫기" : "집기";
     if (mode === "aiming") state.aimTime = 0;
   }
 
@@ -634,6 +1635,8 @@
   }
 
   function endGame() {
+    flushPlayTime();
+    syncTimeBtn();
     detachGrips(true);
     setMode("gameover");
     AudioFx.over();
@@ -654,8 +1657,11 @@
         : state.missionDone
           ? "부탁도 해냈어요"
           : state.prizes === 0
-            ? "집게가 오늘따라 더 약해요"
+            ? kidOn()
+              ? "다음엔 꼭 데려오자!"
+              : "집게가 오늘따라 더 약해요"
             : "오늘 밤의 수확";
+    document.getElementById("overTitle").textContent = kidOn() ? "오늘 데려온 친구들!" : "게임 오버";
     overOverlay.classList.remove("hidden");
   }
 
@@ -707,6 +1713,8 @@
     state.ignoreGrab = 0.35;
     syncKidHud();
     setMode("aiming");
+    showTutorial();
+    syncTimeBtn();
     if (state.challenge) toast(`친구 기록 ${state.challenge.score}점에 도전!`, "win");
     else if (bonusToast) toast(bonusToast, "win");
   }
@@ -739,6 +1747,7 @@
     }
     if (state.ignoreGrab > 0) state.ignoreGrab -= dt;
 
+    tickPlayTime(dt);
     const rawGrab = Input.consumeGrab();
     const grab = rawGrab && state.ignoreGrab <= 0;
     const vec = Input.vector();
@@ -756,14 +1765,19 @@
       state.lastAim.y = claw.y;
       if (vec.mag > 0.08) AudioFx.startMotor();
       else AudioFx.stopMotor();
-      if (grab) spendAndDrop();
+      if (breakDue()) showBreak();
+      else if (grab) {
+        finishTutorial();
+        spendAndDrop();
+      }
     } else {
       AudioFx.stopMotor();
     }
 
     if (state.mode === "descending") {
       claw.z = Math.max(0, claw.z - dt * 0.95);
-      const canClose = claw.z <= 0.38;
+      // 아이 모드는 한 번만 누르면 되도록 바닥에 닿을 때 자동으로 닫는다
+      const canClose = claw.z <= 0.38 && !kidOn();
       if ((grab && canClose) || claw.z <= 0) {
         claw.z = Math.max(0, claw.z);
         setMode("closing");
@@ -891,6 +1905,7 @@
       Draw.plush(ctx, {
         type: p.type,
         golden: p.golden,
+        mineMark: p.mineMark,
         x: p.body.position.x + (p.slipX || 0),
         y: p.body.position.y + (p.slipY || 0),
         radius: p.radius,
@@ -909,6 +1924,7 @@
       Draw.plush(ctx, {
         type: p.type,
         golden: p.golden,
+        mineMark: p.mineMark,
         x: p.body.position.x + (p.slipX || 0),
         y: p.body.position.y + (p.slipY || 0),
         radius: p.radius,
@@ -985,13 +2001,18 @@
     if (host) new ResizeObserver(resize).observe(host);
   }
 
+  I18N.setLang(I18N.detect(navigator.languages || [navigator.language]));
+  I18N.apply(document);
   document.getElementById("startBtn").addEventListener("click", startGame);
+  document.getElementById("kidBtn").addEventListener("click", () => setKidMode(!kidOn()));
+  syncKidMode();
   document.getElementById("retryBtn").addEventListener("click", startGame);
   let sharing = false;
   document.getElementById("shareBtn").addEventListener("click", async () => {
     if (sharing) return;
     sharing = true;
     try {
+      if (!(await parentGate())) return;
       const result = await Share.share({
         score: state.score,
         best: state.save.bestScore,
@@ -1018,9 +2039,17 @@
     if (challenging) return;
     challenging = true;
     try {
+      if (!(await parentGate())) return;
       const code = Fun.encodeChallenge({ score: state.score, prizes: state.prizes, dayKey: Fun.dayKey() });
-      const url = `${location.origin}${location.pathname}?vs=${code}`;
+      const base = window.Capacitor ? SITE_URL : `${location.origin}${location.pathname}`;
+      const url = `${base}?vs=${code}`;
       const text = `몰랑크레인에서 ${state.score}점! 나를 이겨봐 ⚔️`;
+      const nativeResult = await Share.shareText("몰랑크레인 도전장", text, url);
+      if (nativeResult === "shared") {
+        toast("도전장을 보냈어요!", "win");
+        return;
+      }
+      if (nativeResult === "cancelled") return;
       if (navigator.share) {
         try {
           await navigator.share({ title: "몰랑크레인 도전장", text, url });
@@ -1056,7 +2085,12 @@
     if (e.target === dexOverlay) closeDex();
   });
   window.addEventListener("keydown", (e) => {
-    if (e.key === "Escape" && !dexOverlay.classList.contains("hidden")) closeDex();
+    if (e.key !== "Escape") return;
+    if (!gateOverlay.classList.contains("hidden")) finishGate(false);
+    else if (!villageOverlay.classList.contains("hidden")) closeVillage();
+    else if (!makerOverlay.classList.contains("hidden")) closeMaker(true);
+    else if (!roomOverlay.classList.contains("hidden")) closeRoom();
+    else if (!dexOverlay.classList.contains("hidden")) closeDex();
   });
   muteBtn.addEventListener("click", () => {
     AudioFx.unlock();
@@ -1068,7 +2102,7 @@
   });
 
   document.addEventListener("visibilitychange", () => {
-    state.paused = document.hidden || !dexOverlay.classList.contains("hidden");
+    state.paused = document.hidden || overlayOpen();
     if (state.paused) AudioFx.stopMotor();
   });
 
@@ -1108,6 +2142,15 @@
         aimTime: Math.round(state.aimTime * 10) / 10,
         quickWindow: QUICK.window,
         pityAt: Grip.PITY_AT,
+        kidMode: kidOn(),
+        pityAtNow: Grip.pityAt(kidOn()),
+        tutorial: tutorialVisible(),
+        play: {
+          sec: Math.round((state.save.daily.playSec || 0) + playClock.pending),
+          limit: state.save.playLimit,
+          extra: state.save.daily.extraMin || 0,
+          breakOpen: !breakOverlay.classList.contains("hidden"),
+        },
         mission: {
           type: state.mission.type,
           need: state.mission.need,
@@ -1134,9 +2177,39 @@
       Input.grabQueued = true;
     },
     end: endGame,
+    setKidMode,
+    openRoom,
+    closeRoom,
+    room() {
+      return roomResidents().map((p) => ({ type: p.type, x: p.x, y: p.y, name: p.name, pets: p.pets }));
+    },
+    addPlayTime(sec) {
+      state.save = Save.addPlayTime(state.save, sec);
+      Save.store(storage, state.save);
+      syncTimeBtn();
+    },
+    openVillage,
+    openMaker,
+    myPlush() {
+      return MyPlush.spec;
+    },
+    village() {
+      return {
+        open: vil.open,
+        selected: vil.selected,
+        walkers: vil.walkers.map((w) => ({ type: w.type, x: Math.round(w.x), y: Math.round(w.y), pets: w.pets })),
+        name: talkName.textContent,
+        text: talkText.textContent,
+        choices: talkChoices.children.length,
+      };
+    },
+    gateOpen() {
+      return !gateOverlay.classList.contains("hidden");
+    },
     wipeSave() {
       Save.wipe(storage);
       state.save = Save.touchDaily(Save.defaults(TYPE_KEYS), Fun.dayKey()).data;
+      MyPlush.spec = null;
       state.missionDone = false;
       state.mission = Fun.dailyMission(BASE_TYPE_KEYS, Fun.dayKey());
       Save.store(storage, state.save);

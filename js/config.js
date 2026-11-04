@@ -39,11 +39,20 @@ const PLUSH_TYPES = {
   unicorn: { name: "유니콘", points: 320, radius: 27, mass: 1.18, color: "#d7c2ff", rarity: "rare" },
   star: { name: "별뭉치", points: 260, radius: 23, mass: 0.86, color: "#ffe36a", rarity: "rare" },
   moonbunny: { name: "달토끼", points: 400, radius: 25, mass: 1.0, color: "#e8e6ff", rarity: "secret" },
+  // 아이가 직접 만든 애착 인형 (모양은 MyPlush.spec). 250점 이상이면 잡기가 어려워지므로 240점
+  mine: { name: "내 인형", points: 240, radius: 25, mass: 1.0, color: "#ffb3c7", rarity: "mine" },
 };
 
 const GOLDEN = { chance: 0.18, mult: 3 };
 const FEVER = { grabs: 3, bonus: 0.1 };
 const QUICK = { window: 10, points: 30 };
+// 공개 웹 주소. 앱 안에서는 주소가 localhost라 도전장 링크를 이 주소로 만든다
+const SITE_URL = "https://crane-i.vercel.app/";
+// 내 인형이 상자를 채울 때마다 등장할 확률
+const MINE = { chance: 0.5 };
+// 아이 모드: 실패 보정을 앞당기고, 출구 근처 약화와 "거의 다 와서 떨어짐" 편향을 끈다.
+// 정중앙을 맞출수록 잘 잡히도록 coverage 가중치를 키운다.
+const KID = { pityAt: 2, cap: 0.55, coverageGain: 1.5, crowdedMult: 0.75 };
 
 const SPAWN_BAG = [
   "bear",

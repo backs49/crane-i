@@ -165,4 +165,45 @@ function collection() {
   assert.strictEqual(noPrizes.prizes, 0);
 }
 
+{
+  // 아이 모드: 실패 보정이 2회에서 켜지고, 출구 근처에서도 약해지지 않는다
+  const alwaysLose = () => 0.999;
+  const base = { coverage: 0.6, crowded: false, radius: 24, points: 100, x: 210, y: 200 };
+  assert.strictEqual(Grip.pityAt(true), 2);
+  assert.strictEqual(Grip.pityAt(false), Grip.PITY_AT);
+  assert.notStrictEqual(Grip.roll({ ...base, pity: 1, kid: true }, alwaysLose).kind, "hold");
+  assert.strictEqual(Grip.roll({ ...base, pity: 2, kid: true }, alwaysLose).kind, "hold");
+  assert.notStrictEqual(Grip.roll({ ...base, pity: 2 }, alwaysLose).kind, "hold");
+
+  const nearChute = { coverage: 1, crowded: false, radius: 24, points: 100, x: 210, y: 420 };
+  const farAway = { ...nearChute, y: 120 };
+  assert.ok(Grip.winChance(nearChute) < Grip.winChance(farAway));
+  assert.strictEqual(Grip.winChance({ ...nearChute, kid: true }), Grip.winChance({ ...farAway, kid: true }));
+  assert.strictEqual(Grip.roll({ ...nearChute, kid: true }, alwaysLose).location, 1);
+
+  // 정중앙일수록 확실히 잘 잡힌다: 아이 모드에서 중앙과 가장자리의 차이가 더 크다
+  const edge = { ...farAway, coverage: 0.4 };
+  const gapKid = Grip.winChance({ ...farAway, kid: true }) - Grip.winChance({ ...edge, kid: true });
+  const gapNormal = Grip.winChance(farAway) - Grip.winChance(edge);
+  assert.ok(gapKid > gapNormal);
+  assert.ok(Grip.winChance({ ...farAway, kid: true }) > Grip.winChance(farAway));
+  assert.ok(Grip.winChance({ ...farAway, kid: true, bonus: 1 }) <= 0.55);
+  assert.ok(Grip.winChance({ ...farAway, bonus: 1 }) <= 0.36);
+}
+
+{
+  // 놀이 시간: 한도 0이면 꺼짐, 2분 전 경고, 다 쓰면 쉬는 시간, 추가 시간 반영
+  assert.strictEqual(Fun.playStatus(99999, 0, 0).over, false);
+  assert.strictEqual(Fun.playStatus(99999, 0, 0).on, false);
+  const fresh = Fun.playStatus(0, 30, 0);
+  assert.strictEqual(fresh.remain, 1800);
+  assert.strictEqual(fresh.warn, false);
+  assert.strictEqual(Fun.playStatus(1800 - 120, 30, 0).warn, true);
+  assert.strictEqual(Fun.playStatus(1800 - 121, 30, 0).warn, false);
+  assert.strictEqual(Fun.playStatus(1800, 30, 0).over, true);
+  assert.strictEqual(Fun.playStatus(1800, 30, 0).warn, false);
+  assert.strictEqual(Fun.playStatus(1800, 30, 10).over, false);
+  assert.strictEqual(Fun.playStatus(1800, 30, 10).remain, 600);
+}
+
 console.log("fun.test.js ok");

@@ -1,0 +1,20 @@
+{
+  "name": "molang-crane-app",
+  "private": true,
+  "version": "1.0.0",
+  "description": "몰랑크레인 안드로이드 앱 포장 (Capacitor). 게임 본체는 저장소 루트의 정적 파일이다.",
+  "scripts": {
+    "copy": "node scripts/copy-web.mjs",
+    "sync": "node scripts/copy-web.mjs && cap sync android",
+    "open": "cap open android"
+  },
+  "dependencies": {
+    "@capacitor/android": "^8.6.0",
+    "@capacitor/core": "^8.6.0",
+    "@capacitor/filesystem": "^8.1.5",
+    "@capacitor/share": "^8.0.3"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^8.6.0"
+  }
+}

@@ -6,6 +6,9 @@ const Input = {
 
   init() {
     window.addEventListener("keydown", (e) => {
+      // 이름 입력 칸에서는 게임 조작으로 가로채지 않는다
+      const tag = e.target && e.target.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA") return;
       this.keys[e.key] = true;
       if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", " "].includes(e.key)) {
         e.preventDefault();

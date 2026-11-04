@@ -195,4 +195,43 @@ const TYPES = ["bear", "bunny", "unicorn"];
   assert.strictEqual(loaded.bestScore, 5);
 }
 
+{
+  // 아이 모드는 기본 켜짐, 끈 선택은 저장과 병합 후에도 유지된다
+  assert.strictEqual(Save.defaults(TYPES).kidMode, true);
+  assert.strictEqual(Save.normalize({}, TYPES).kidMode, true);
+  assert.strictEqual(Save.normalize({ kidMode: false }, TYPES).kidMode, false);
+  const off = Save.setKidMode(Save.defaults(TYPES), false);
+  assert.strictEqual(off.kidMode, false);
+  assert.strictEqual(Save.merge(Save.defaults(TYPES), off).kidMode, false);
+  let disk = null;
+  const mem = { getItem() { return disk; }, setItem(k, v) { disk = v; } };
+  Save.store(mem, off);
+  assert.strictEqual(Save.load(mem, TYPES).kidMode, false);
+}
+
+{
+  // 놀이 시간·튜토리얼: 기본값, 정리, 하루가 바뀌면 초기화, 병합은 큰 쪽
+  const d = Save.defaults(TYPES);
+  assert.strictEqual(d.playLimit, 30);
+  assert.strictEqual(d.tutorialDone, false);
+  assert.strictEqual(d.daily.playSec, 0);
+  assert.strictEqual(Save.normalize({ playLimit: 999 }, TYPES).playLimit, 30);
+  assert.strictEqual(Save.normalize({ playLimit: 0 }, TYPES).playLimit, 0);
+  assert.strictEqual(Save.normalize({ daily: { date: "x", playSec: -5 } }, TYPES).daily.playSec, 0);
+  let t = Save.touchDaily(d, "2026-11-04").data;
+  t = Save.addPlayTime(t, 90);
+  t = Save.addExtraTime(t, 10);
+  assert.strictEqual(t.daily.playSec, 90);
+  assert.strictEqual(t.daily.extraMin, 10);
+  const tomorrow = Save.touchDaily(t, "2026-11-05").data;
+  assert.strictEqual(tomorrow.daily.playSec, 0);
+  assert.strictEqual(tomorrow.daily.extraMin, 0);
+  const other = Save.addPlayTime(Save.touchDaily(d, "2026-11-04").data, 200);
+  assert.strictEqual(Save.merge(t, other).daily.playSec, 200);
+  assert.strictEqual(Save.merge(t, other).daily.extraMin, 10);
+  assert.strictEqual(Save.setPlayLimit(d, 15).playLimit, 15);
+  assert.strictEqual(Save.setPlayLimit(d, 7).playLimit, 30);
+  assert.strictEqual(Save.merge(Save.finishTutorial(d), d).tutorialDone, true);
+}
+
 console.log("save.test.js ok");
