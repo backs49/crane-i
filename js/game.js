@@ -2041,8 +2041,15 @@
     try {
       if (!(await parentGate())) return;
       const code = Fun.encodeChallenge({ score: state.score, prizes: state.prizes, dayKey: Fun.dayKey() });
-      const url = `${location.origin}${location.pathname}?vs=${code}`;
+      const base = window.Capacitor ? SITE_URL : `${location.origin}${location.pathname}`;
+      const url = `${base}?vs=${code}`;
       const text = `몰랑크레인에서 ${state.score}점! 나를 이겨봐 ⚔️`;
+      const nativeResult = await Share.shareText("몰랑크레인 도전장", text, url);
+      if (nativeResult === "shared") {
+        toast("도전장을 보냈어요!", "win");
+        return;
+      }
+      if (nativeResult === "cancelled") return;
       if (navigator.share) {
         try {
           await navigator.share({ title: "몰랑크레인 도전장", text, url });

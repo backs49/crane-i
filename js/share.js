@@ -101,7 +101,41 @@ const Share = {
     return this.shareCanvas(this.card(info), text, "molang-crane.png");
   },
 
+  // 안드로이드 앱(Capacitor) 안에서는 웹 공유가 없으므로 기기 공유 창을 쓴다
+  native() {
+    const P = typeof window !== "undefined" && window.Capacitor && window.Capacitor.Plugins;
+    return P && P.Share && P.Filesystem ? P : null;
+  },
+
+  async shareNative(P, canvas, text, filename) {
+    try {
+      const data = canvas.toDataURL("image/png").split(",")[1];
+      const file = await P.Filesystem.writeFile({ path: filename, data, directory: "CACHE" });
+      await P.Share.share({ title: "몰랑크레인", text, files: [file.uri] });
+      return "shared";
+    } catch (err) {
+      const msg = String((err && (err.message || err.errorMessage)) || err);
+      return /cancel/i.test(msg) ? "cancelled" : "fail";
+    }
+  },
+
+  async shareText(title, text, url) {
+    const P = this.native();
+    if (P) {
+      try {
+        await P.Share.share({ title, text, url });
+        return "shared";
+      } catch (err) {
+        const msg = String((err && (err.message || err.errorMessage)) || err);
+        return /cancel/i.test(msg) ? "cancelled" : "fail";
+      }
+    }
+    return null;
+  },
+
   async shareCanvas(canvas, text, filename) {
+    const P = this.native();
+    if (P) return this.shareNative(P, canvas, text, filename);
     const blob = await new Promise((res) => canvas.toBlob(res, "image/png"));
     if (!blob) return "fail";
     if (typeof File !== "undefined" && navigator.canShare) {

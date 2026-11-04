@@ -264,7 +264,8 @@
     <script src="js/input.js"></script>
     <script src="js/game.js"></script>
     <script>
-      if ("serviceWorker" in navigator && location.protocol.startsWith("http")) {
+      // 앱(Capacitor) 안에서는 게임 파일이 앱에 들어 있으므로 서비스 워커를 쓰지 않는다
+      if ("serviceWorker" in navigator && location.protocol.startsWith("http") && !window.Capacitor) {
         window.addEventListener("load", () => navigator.serviceWorker.register("sw.js"));
       }
     </script>

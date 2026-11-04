@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">몰랑크레인</string>
+    <string name="title_activity_main">몰랑크레인</string>
+    <string name="package_name">com.molangcrane.game</string>
+    <string name="custom_url_scheme">com.molangcrane.game</string>
+</resources>

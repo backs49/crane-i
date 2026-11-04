@@ -1,0 +1,11 @@
+{
+  "appId": "com.molangcrane.game",
+  "appName": "몰랑크레인",
+  "webDir": "www",
+  "backgroundColor": "#120818",
+  "android": {
+    "allowMixedContent": false,
+    "captureInput": true,
+    "webContentsDebuggingEnabled": false
+  }
+}

@@ -46,6 +46,8 @@ const PLUSH_TYPES = {
 const GOLDEN = { chance: 0.18, mult: 3 };
 const FEVER = { grabs: 3, bonus: 0.1 };
 const QUICK = { window: 10, points: 30 };
+// 공개 웹 주소. 앱 안에서는 주소가 localhost라 도전장 링크를 이 주소로 만든다
+const SITE_URL = "https://crane-i.vercel.app/";
 // 내 인형이 상자를 채울 때마다 등장할 확률
 const MINE = { chance: 0.5 };
 // 아이 모드: 실패 보정을 앞당기고, 출구 근처 약화와 "거의 다 와서 떨어짐" 편향을 끈다.
