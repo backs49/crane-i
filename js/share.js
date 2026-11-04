@@ -97,12 +97,15 @@ const Share = {
   },
 
   async share(info) {
-    const canvas = this.card(info);
+    const text = `몰랑크레인에서 ${info.score}점! 인형 ${info.prizes}개를 데려왔어요`;
+    return this.shareCanvas(this.card(info), text, "molang-crane.png");
+  },
+
+  async shareCanvas(canvas, text, filename) {
     const blob = await new Promise((res) => canvas.toBlob(res, "image/png"));
     if (!blob) return "fail";
-    const text = `몰랑크레인에서 ${info.score}점! 인형 ${info.prizes}개를 데려왔어요`;
     if (typeof File !== "undefined" && navigator.canShare) {
-      const file = new File([blob], "molang-crane.png", { type: "image/png" });
+      const file = new File([blob], filename, { type: "image/png" });
       if (navigator.canShare({ files: [file] })) {
         try {
           await navigator.share({ files: [file], title: "몰랑크레인", text });
@@ -123,7 +126,7 @@ const Share = {
     }
     const a = document.createElement("a");
     a.href = canvas.toDataURL("image/png");
-    a.download = "molang-crane.png";
+    a.download = filename;
     a.click();
     return "downloaded";
   },

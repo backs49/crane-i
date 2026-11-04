@@ -787,3 +787,91 @@ h1 {
     --play-h: min(52dvh, calc(100dvh - 300px));
   }
 }
+
+/* 내 인형 방 */
+.room-dialog {
+  padding-bottom: 16px;
+}
+
+.room-dialog h2 {
+  font-size: 30px;
+  margin-bottom: 8px;
+}
+
+#roomCanvas {
+  display: block;
+  width: min(100%, calc(46dvh * 0.9));
+  height: auto;
+  margin: 0 auto;
+  border-radius: 16px;
+  border: 3px solid #5a2878;
+  touch-action: none;
+}
+
+.room-tip {
+  margin: 8px 0 0;
+  font-size: 13px;
+  color: var(--lilac);
+}
+
+.room-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.room-actions .ghost {
+  font-size: 16px;
+}
+
+.ghost:disabled {
+  opacity: 0.45;
+}
+
+.room-name {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.room-name[hidden] {
+  display: none;
+}
+
+.room-name input {
+  flex: 1;
+  min-width: 0;
+  border-radius: 999px;
+  border: 2px solid rgba(255, 234, 244, 0.35);
+  background: #140814;
+  color: var(--cream);
+  padding: 8px 14px;
+  font-size: 16px;
+  font-family: inherit;
+}
+
+.room-name .ghost {
+  width: auto;
+  margin-top: 0;
+  padding: 8px 16px;
+  font-size: 16px;
+}
+
+/* 보호자 확인 */
+.gate-choices {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 4px;
+}
+
+.gate-choices .primary {
+  font-size: 26px;
+  padding: 10px;
+}
+
+.toast.float {
+  position: fixed;
+  top: max(18px, env(safe-area-inset-top));
+  z-index: 40;
+}

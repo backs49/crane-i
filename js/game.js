@@ -485,8 +485,267 @@
   function closeDex() {
     dexOverlay.classList.add("hidden");
     Input.grabQueued = false;
-    state.paused = document.hidden;
+    state.paused = document.hidden || overlayOpen();
   }
+
+  function overlayOpen() {
+    return [dexOverlay, roomOverlay, gateOverlay].some((el) => !el.classList.contains("hidden"));
+  }
+
+  // ---- 보호자 확인: 아이 모드에서 밖으로 나가는 동작(공유·도전장·사진) 앞에 둔다 ----
+  const gateOverlay = document.getElementById("gateOverlay");
+  const gateQ = document.getElementById("gateQ");
+  const gateChoices = document.getElementById("gateChoices");
+  const GATE_LOCK = 15;
+  let gateLockUntil = 0;
+  let gateResolve = null;
+
+  function finishGate(ok) {
+    gateOverlay.classList.add("hidden");
+    Input.grabQueued = false;
+    state.paused = document.hidden || overlayOpen();
+    const done = gateResolve;
+    gateResolve = null;
+    if (done) done(ok);
+  }
+
+  function parentGate() {
+    if (!kidOn()) return Promise.resolve(true);
+    const wait = Math.ceil((gateLockUntil - performance.now()) / 1000);
+    if (wait > 0) {
+      toast(`${wait}초 뒤에 어른과 함께 다시 해요`, "fail");
+      return Promise.resolve(false);
+    }
+    if (gateResolve) finishGate(false);
+    const q = Fun.parentQuestion();
+    gateQ.textContent = q.label;
+    gateChoices.innerHTML = "";
+    for (const v of q.choices) {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "primary";
+      b.textContent = String(v);
+      b.addEventListener("click", () => {
+        const ok = Fun.checkParent(q, v);
+        if (!ok) {
+          gateLockUntil = performance.now() + GATE_LOCK * 1000;
+          toast("어른에게 부탁해요!", "fail");
+        }
+        finishGate(ok);
+      });
+      gateChoices.appendChild(b);
+    }
+    gateOverlay.classList.remove("hidden");
+    state.paused = true;
+    AudioFx.stopMotor();
+    return new Promise((res) => {
+      gateResolve = res;
+    });
+  }
+
+  document.getElementById("gateCancel").addEventListener("click", () => finishGate(false));
+
+  // ---- 내 인형 방 ----
+  const roomOverlay = document.getElementById("roomOverlay");
+  const roomCanvas = document.getElementById("roomCanvas");
+  const roomCtx = roomCanvas.getContext("2d");
+  const roomNameBtn = document.getElementById("roomNameBtn");
+  const roomNameRow = document.getElementById("roomNameRow");
+  const roomNameInput = document.getElementById("roomNameInput");
+  const NAMES = Object.fromEntries(TYPE_KEYS.map((k) => [k, PLUSH_TYPES[k].name]));
+  const roomUi = { open: false, list: [], anim: {}, fx: [], selected: null, drag: null, last: 0, time: 0 };
+
+  function roomResidents() {
+    return Room.residents(state.save.dexCounts, state.save.room, TYPE_KEYS, NAMES);
+  }
+
+  function saveRoom(room) {
+    state.save = Save.setRoom(state.save, room);
+    Save.store(storage, state.save);
+    roomUi.list = roomResidents();
+  }
+
+  function selectResident(type) {
+    roomUi.selected = type;
+    roomNameBtn.disabled = !type;
+    if (!type) roomNameRow.hidden = true;
+  }
+
+  function openRoom() {
+    roomUi.list = roomResidents();
+    roomUi.anim = {};
+    roomUi.fx = [];
+    selectResident(null);
+    document.getElementById("roomTitle").textContent = roomUi.list.length
+      ? `내 인형 방 · 친구 ${roomUi.list.length}`
+      : "내 인형 방";
+    roomOverlay.classList.remove("hidden");
+    state.paused = true;
+    AudioFx.stopMotor();
+    if (!roomUi.open) {
+      roomUi.open = true;
+      roomUi.last = performance.now();
+      requestAnimationFrame(roomFrame);
+    }
+  }
+
+  function closeRoom() {
+    roomOverlay.classList.add("hidden");
+    roomUi.open = false;
+    roomUi.drag = null;
+    roomNameRow.hidden = true;
+    Input.grabQueued = false;
+    state.paused = document.hidden || overlayOpen();
+  }
+
+  function roomFrame(now) {
+    if (!roomUi.open) return;
+    const dt = Math.min(0.05, (now - roomUi.last) / 1000);
+    roomUi.last = now;
+    roomUi.time += dt;
+    for (const k of Object.keys(roomUi.anim)) {
+      const a = roomUi.anim[k];
+      a.bounce = Math.max(0, (a.bounce || 0) - dt * 1.4);
+    }
+    for (const p of roomUi.list) {
+      const a = roomUi.anim[p.type] || (roomUi.anim[p.type] = {});
+      a.blinkT = (a.blinkT == null ? 1 + Math.random() * 3 : a.blinkT) - dt;
+      a.blink = a.blinkT < 0.12 && a.blinkT > 0 ? 0.1 : 1;
+      if (a.blinkT <= 0) a.blinkT = 2 + Math.random() * 3;
+    }
+    roomUi.fx = roomUi.fx.filter((f) => (f.life -= dt * 1.1) > 0);
+    for (const f of roomUi.fx) {
+      f.y -= dt * 40;
+      f.x += f.vx * dt;
+    }
+    roomCtx.setTransform(roomCanvas.width / Room.W, 0, 0, roomCanvas.height / Room.H, 0, 0);
+    Room.paint(roomCtx, roomUi.list, {
+      time: roomUi.time,
+      anim: roomUi.anim,
+      fx: roomUi.fx,
+      selected: roomUi.selected,
+      dragging: roomUi.drag && roomUi.drag.moved ? roomUi.drag.type : null,
+    });
+    requestAnimationFrame(roomFrame);
+  }
+
+  function roomPoint(e) {
+    const r = roomCanvas.getBoundingClientRect();
+    return { x: ((e.clientX - r.left) / r.width) * Room.W, y: ((e.clientY - r.top) / r.height) * Room.H };
+  }
+
+  function petResident(type) {
+    const p = roomUi.list.find((q) => q.type === type);
+    if (!p) return;
+    const before = Room.hearts(p.pets);
+    saveRoom(Room.pet(state.save.room, type));
+    const a = roomUi.anim[type] || (roomUi.anim[type] = {});
+    a.bounce = 1;
+    for (let i = 0; i < 3; i++) roomUi.fx.push({ x: p.x + (i - 1) * 10, y: p.y - 26, vx: (i - 1) * 18, life: 1 });
+    AudioFx.tone(660 + Math.random() * 180, 0.12, "sine", 0.12, 1.4);
+    const after = Room.hearts(p.pets + 1);
+    if (after > before) toast(`${p.name}와(과) 더 친해졌어요! ♥${after}`, "win");
+    if (navigator.vibrate) navigator.vibrate(12);
+  }
+
+  roomCanvas.addEventListener("pointerdown", (e) => {
+    const pt = roomPoint(e);
+    const p = Room.hit(roomUi.list, pt.x, pt.y);
+    if (!p) {
+      selectResident(null);
+      return;
+    }
+    roomCanvas.setPointerCapture(e.pointerId);
+    roomUi.drag = { type: p.type, id: e.pointerId, sx: pt.x, sy: pt.y, ox: p.x - pt.x, oy: p.y - pt.y, moved: false };
+    selectResident(p.type);
+  });
+  roomCanvas.addEventListener("pointermove", (e) => {
+    const d = roomUi.drag;
+    if (!d || d.id !== e.pointerId) return;
+    const pt = roomPoint(e);
+    if (!d.moved && Math.hypot(pt.x - d.sx, pt.y - d.sy) < 8) return;
+    d.moved = true;
+    const p = roomUi.list.find((q) => q.type === d.type);
+    const pos = Room.clampPos(pt.x + d.ox, pt.y + d.oy);
+    p.x = pos.x;
+    p.y = pos.y;
+  });
+  const endRoomDrag = (e) => {
+    const d = roomUi.drag;
+    if (!d || d.id !== e.pointerId) return;
+    roomUi.drag = null;
+    if (d.moved) {
+      const p = roomUi.list.find((q) => q.type === d.type);
+      saveRoom(Room.move(state.save.room, d.type, p.x, p.y));
+    } else if (e.type === "pointerup") {
+      petResident(d.type);
+    }
+  };
+  roomCanvas.addEventListener("pointerup", endRoomDrag);
+  roomCanvas.addEventListener("pointercancel", endRoomDrag);
+
+  roomNameBtn.addEventListener("click", () => {
+    if (!roomUi.selected) return;
+    const p = roomUi.list.find((q) => q.type === roomUi.selected);
+    roomNameRow.hidden = false;
+    roomNameInput.value = p ? p.name : "";
+    roomNameInput.focus();
+  });
+  const commitName = () => {
+    if (!roomUi.selected) return;
+    saveRoom(Room.rename(state.save.room, roomUi.selected, roomNameInput.value));
+    roomNameRow.hidden = true;
+    roomNameInput.blur();
+    toast("이름을 지었어요!", "win");
+  };
+  document.getElementById("roomNameSave").addEventListener("click", commitName);
+  roomNameInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") commitName();
+  });
+
+  function roomPhoto() {
+    const c = document.createElement("canvas");
+    c.width = Room.W * 2;
+    c.height = Room.H * 2 + 120;
+    const g = c.getContext("2d");
+    g.fillStyle = "#1a0b2c";
+    g.fillRect(0, 0, c.width, c.height);
+    g.fillStyle = "#ffeaf4";
+    g.font = "44px 'Bagel Fat One', 'Jua', sans-serif";
+    g.textAlign = "center";
+    g.fillText("내 인형 방", c.width / 2, 72);
+    g.save();
+    g.translate(0, 100);
+    g.scale(2, 2);
+    Room.paint(g, roomUi.list, { time: roomUi.time, anim: {} });
+    g.restore();
+    return c;
+  }
+
+  let photographing = false;
+  document.getElementById("roomPhotoBtn").addEventListener("click", async () => {
+    if (photographing) return;
+    if (!roomUi.list.length) {
+      toast("먼저 인형을 데려와요!", "fail");
+      return;
+    }
+    photographing = true;
+    try {
+      if (!(await parentGate())) return;
+      const result = await Share.shareCanvas(roomPhoto(), "몰랑크레인 내 인형 방 🧸", "molang-room.png");
+      if (result === "cancelled") return;
+      const msgs = { shared: "공유 완료!", copied: "사진이 복사됐어요", downloaded: "사진을 저장했어요", fail: "사진 저장에 실패했어요…" };
+      toast(msgs[result] || msgs.fail, result === "fail" ? "fail" : "win");
+    } finally {
+      photographing = false;
+    }
+  });
+  document.getElementById("roomCloseBtn").addEventListener("click", closeRoom);
+  document.getElementById("roomBtn").addEventListener("click", openRoom);
+  document.getElementById("overRoomBtn").addEventListener("click", openRoom);
+  roomOverlay.addEventListener("click", (e) => {
+    if (e.target === roomOverlay) closeRoom();
+  });
 
   function carryProgress() {
     if (state.mode === "ascending") return claw.z * 0.34;
@@ -626,7 +885,28 @@
     prizeRail.appendChild(c);
   }
 
+  // 팝업이 열려 있으면 게임 화면 안 토스트가 가려지므로 화면 맨 위에 띄운다.
+  // 팝업 중에는 게임 루프가 멈춰 있어 타이머도 따로 돈다.
+  const floatToastEl = document.getElementById("floatToast");
+  let floatToastTimer = 0;
+
+  function anyOverlayVisible() {
+    return [titleOverlay, overOverlay, dexOverlay, roomOverlay, gateOverlay].some(
+      (el) => el && !el.classList.contains("hidden"),
+    );
+  }
+
   function toast(msg, kind) {
+    if (anyOverlayVisible()) {
+      floatToastEl.hidden = false;
+      floatToastEl.textContent = msg;
+      floatToastEl.className = `toast float ${kind || ""}`;
+      clearTimeout(floatToastTimer);
+      floatToastTimer = setTimeout(() => {
+        floatToastEl.hidden = true;
+      }, 1600);
+      return;
+    }
     toastEl.hidden = false;
     toastEl.textContent = msg;
     toastEl.className = `toast ${kind || ""}`;
@@ -1028,6 +1308,7 @@
     if (sharing) return;
     sharing = true;
     try {
+      if (!(await parentGate())) return;
       const result = await Share.share({
         score: state.score,
         best: state.save.bestScore,
@@ -1054,6 +1335,7 @@
     if (challenging) return;
     challenging = true;
     try {
+      if (!(await parentGate())) return;
       const code = Fun.encodeChallenge({ score: state.score, prizes: state.prizes, dayKey: Fun.dayKey() });
       const url = `${location.origin}${location.pathname}?vs=${code}`;
       const text = `몰랑크레인에서 ${state.score}점! 나를 이겨봐 ⚔️`;
@@ -1092,7 +1374,10 @@
     if (e.target === dexOverlay) closeDex();
   });
   window.addEventListener("keydown", (e) => {
-    if (e.key === "Escape" && !dexOverlay.classList.contains("hidden")) closeDex();
+    if (e.key !== "Escape") return;
+    if (!gateOverlay.classList.contains("hidden")) finishGate(false);
+    else if (!roomOverlay.classList.contains("hidden")) closeRoom();
+    else if (!dexOverlay.classList.contains("hidden")) closeDex();
   });
   muteBtn.addEventListener("click", () => {
     AudioFx.unlock();
@@ -1104,7 +1389,7 @@
   });
 
   document.addEventListener("visibilitychange", () => {
-    state.paused = document.hidden || !dexOverlay.classList.contains("hidden");
+    state.paused = document.hidden || overlayOpen();
     if (state.paused) AudioFx.stopMotor();
   });
 
@@ -1173,6 +1458,14 @@
     },
     end: endGame,
     setKidMode,
+    openRoom,
+    closeRoom,
+    room() {
+      return roomResidents().map((p) => ({ type: p.type, x: p.x, y: p.y, name: p.name, pets: p.pets }));
+    },
+    gateOpen() {
+      return !gateOverlay.classList.contains("hidden");
+    },
     wipeSave() {
       Save.wipe(storage);
       state.save = Save.touchDaily(Save.defaults(TYPE_KEYS), Fun.dayKey()).data;

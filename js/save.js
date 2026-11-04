@@ -27,7 +27,7 @@ const Save = {
   defaults(typeKeys) {
     const dexCounts = Object.create(null);
     for (const t of typeKeys) dexCounts[t] = 0;
-    return { v: 1, bestScore: 0, totalPrizes: 0, totalPlays: 0, dexCounts, daily: this.emptyDaily(""), moonUnlocked: false, kidMode: true };
+    return { v: 1, bestScore: 0, totalPrizes: 0, totalPlays: 0, dexCounts, daily: this.emptyDaily(""), moonUnlocked: false, kidMode: true, room: {} };
   },
 
   normalize(raw, typeKeys) {
@@ -44,6 +44,7 @@ const Save = {
       moonUnlocked: !!raw.moonUnlocked,
       // 아이 모드는 기본으로 켜져 있고, 끈 기록이 있을 때만 꺼진다
       kidMode: raw.kidMode !== false,
+      room: this.normalizeRoom(raw.room, typeKeys),
     };
     if (raw.dexCounts && typeof raw.dexCounts === "object") {
       for (const t of typeKeys) out.dexCounts[t] = num(raw.dexCounts[t]);
@@ -86,6 +87,7 @@ const Save = {
       moonUnlocked: !!(a.moonUnlocked || b.moonUnlocked),
       // 설정은 진행도가 아니라 선택이므로 지금 저장하는 쪽(b)을 따른다
       kidMode: b.kidMode !== false,
+      room: this.mergeRoom(a.room, b.room),
     };
   },
 
@@ -145,6 +147,45 @@ const Save = {
 
   dexComplete(data, keys) {
     return keys.every((k) => (data.dexCounts[k] || 0) > 0);
+  },
+
+  // 방 데이터: { [type]: { x, y, name, pets } } — 알 수 없는 종류나 잘못된 값은 버린다
+  normalizeRoom(raw, typeKeys) {
+    const out = {};
+    if (!raw || typeof raw !== "object") return out;
+    for (const t of typeKeys) {
+      const e = raw[t];
+      if (!e || typeof e !== "object") continue;
+      const clean = {};
+      if (Number.isFinite(e.x) && Number.isFinite(e.y)) {
+        clean.x = Math.max(0, Math.min(1000, e.x));
+        clean.y = Math.max(0, Math.min(1000, e.y));
+      }
+      if (typeof e.name === "string") {
+        const name = Array.from(e.name.replace(/[\u0000-\u001f\u007f<>]/g, "").trim()).slice(0, 8).join("").trim();
+        if (name) clean.name = name;
+      }
+      if (Number.isFinite(e.pets) && e.pets > 0) clean.pets = Math.min(9999, Math.floor(e.pets));
+      if (Object.keys(clean).length) out[t] = clean;
+    }
+    return out;
+  },
+
+  // 위치·이름은 지금 저장하는 쪽(b), 쓰다듬은 횟수는 큰 쪽을 따른다
+  mergeRoom(a, b) {
+    const out = {};
+    const ra = a || {};
+    const rb = b || {};
+    for (const t of new Set(Object.keys(ra).concat(Object.keys(rb)))) {
+      const pets = Math.max((ra[t] && ra[t].pets) || 0, (rb[t] && rb[t].pets) || 0);
+      out[t] = Object.assign({}, ra[t], rb[t]);
+      if (pets) out[t].pets = pets;
+    }
+    return out;
+  },
+
+  setRoom(data, room) {
+    return Object.assign({}, data, { room });
   },
 
   setKidMode(data, on) {

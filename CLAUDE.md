@@ -16,11 +16,11 @@ python3 -m http.server 8000   # then open http://localhost:8000
 
 - Append `?debug` to the URL to overlay Matter.js body wireframes.
 - `window.__crane` is a console/automation hook: `snapshot()` (mode, coins, score, plush positions, claw, last grip result), `start()`, `aim(x, y)`, `grab()`, `end()`. Use it to drive the game programmatically when verifying changes in a browser.
-- `js/grip.js`, `js/fun.js`, and `js/save.js` are Node-loadable (`module.exports` guard), so their logic can be tested/tuned without a browser — see `tests/fun.test.js`, `tests/save.test.js`, and `tests/load-scripts.js` (run with plain `node`).
+- `js/grip.js`, `js/fun.js`, `js/save.js`, and `js/room.js` are Node-loadable (`module.exports` guard), so their logic can be tested/tuned without a browser — see `tests/fun.test.js`, `tests/save.test.js`, `tests/room.test.js`, and `tests/load-scripts.js` (run with plain `node`).
 
 ## Architecture
 
-Plain `<script>` tags sharing globals — no modules, no bundler. Load order in `index.html` matters: `vendor/matter.min.js` → `config.js` (constants) → `save.js` → `fun.js` → `grip.js` → `share.js` → `audio.js` → `particles.js` → `draw.js` → `input.js` → `game.js`. Each file defines one global (`Save`, `Fun`, `Grip`, `Share`, `AudioFx`, `Particles`, `Draw`, `Input`); `game.js` is an IIFE that owns all state and the loop.
+Plain `<script>` tags sharing globals — no modules, no bundler. Load order in `index.html` matters: `vendor/matter.min.js` → `config.js` (constants) → `save.js` → `fun.js` → `grip.js` → `share.js` → `room.js` → `audio.js` → `particles.js` → `draw.js` → `input.js` → `game.js`. Each file defines one global (`Save`, `Fun`, `Grip`, `Share`, `Room`, `AudioFx`, `Particles`, `Draw`, `Input`); `game.js` is an IIFE that owns all state and the loop.
 
 - **`config.js`** — all tuning constants: world size (420×500 logical units), collision categories (`CAT`), chute/home positions, `CLAW_SPEED`/`CLAW_POWER`, `PLUSH_TYPES` (points/radius/mass/color/rarity), and `SPAWN_BAG` (the exact multiset of plushes each box fill spawns).
 - **`game.js`** — state machine in `state.mode`: `title → aiming → descending → closing → ascending → returning → releasing → (aiming | gameover)`. `update()` branches on mode; `setMode()` updates the HUD labels.
@@ -28,5 +28,7 @@ Plain `<script>` tags sharing globals — no modules, no bundler. Load order in 
 - **Grab outcomes are RNG, not emergent physics** — this is a deliberate design choice: the claw is intentionally weak and slippery. `Grip.coverage()` scores how centered the claw is over a plush; `Grip.locationFactor(x, y)` only weakens the claw near the prize chute (the real-machine "kill zone"). The rest of the box stays near the baseline rate so typical pile grabs stay kid-friendly. Near the chute, `Grip.roll()` also biases toward late slips. `updateCarry()` plays the rolled outcome out. Win probability is capped at 0.36 — except after four consecutive slips, when the pity floor (`Grip.PITY_AT`) guarantees a hold.
 - **Rendering** is entirely custom Canvas 2D in `draw.js` (plushes, gantry, claw, field). World coordinates (420×500) are scaled to the canvas in `worldTransform()`; devicePixelRatio is capped at 2. Plushes are drawn in two y-sorted passes (floor, then airborne above the gantry).
 - **`audio.js`** synthesizes all SFX/BGM with the Web Audio API (no audio assets); the context unlocks on first pointerdown.
-- **Persistence**: `js/save.js` stores best score, dex counts, and daily state in `localStorage`.
+- **Kid mode** (`KID` in `config.js`, on by default, saved as `kidMode`): pity after two slips, no chute weakening or late-slip bias, stronger reward for centered aims, one-tap grab (auto-close), gentler game-over copy. Anything that leaves the app (share card, challenge link, room photo) goes through `parentGate()` in kid mode.
+- **My plush room** (`js/room.js`): every caught type lives in a room overlay where kids pet (hearts every 5 pets), drag, rename, and photograph plushes; state is saved under `save.room`.
+- **Persistence**: `js/save.js` stores best score, dex counts, daily state, kid mode, and room state in `localStorage`.
 - **Service worker**: `sw.js` precaches the shell for offline play — bump its `CACHE` version whenever game files change.

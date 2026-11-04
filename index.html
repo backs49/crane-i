@@ -118,6 +118,7 @@
         </ol>
         <button type="button" class="primary" id="startBtn">코인 넣기</button>
         <button type="button" class="ghost" id="kidBtn" aria-pressed="true">아이 모드 켜짐 🧸</button>
+        <button type="button" class="ghost" id="roomBtn">내 인형 방 🏠</button>
         <p class="fine" id="titleFine">코인 8개 · 하루 첫 방문 +2 · 오늘의 부탁 완료 시 +2</p>
       </div>
     </div>
@@ -141,6 +142,7 @@
           </div>
         </div>
         <button type="button" class="primary" id="retryBtn">한 판 더</button>
+        <button type="button" class="ghost" id="overRoomBtn">내 인형 방 🏠</button>
         <button type="button" class="ghost" id="shareBtn">자랑하기 📸</button>
         <button type="button" class="ghost" id="challengeBtn">도전장 보내기 ⚔️</button>
       </div>
@@ -155,12 +157,43 @@
       </div>
     </div>
 
+    <div class="overlay hidden" id="roomOverlay">
+      <div class="dialog candy room-dialog">
+        <p class="eyebrow">몰랑 인형 방</p>
+        <h2 id="roomTitle">내 인형 방</h2>
+        <canvas id="roomCanvas" width="720" height="800" aria-label="내 인형 방"></canvas>
+        <p class="room-tip" id="roomTip">톡 누르면 쓰다듬어요 · 꾹 끌면 옮겨요</p>
+        <div class="room-name" id="roomNameRow" hidden>
+          <input type="text" id="roomNameInput" maxlength="8" placeholder="새 이름 (8자)" autocomplete="off" />
+          <button type="button" class="ghost" id="roomNameSave">저장</button>
+        </div>
+        <div class="room-actions">
+          <button type="button" class="ghost" id="roomNameBtn" disabled>이름 짓기</button>
+          <button type="button" class="ghost" id="roomPhotoBtn">사진 찍기 📸</button>
+        </div>
+        <button type="button" class="primary" id="roomCloseBtn">닫기</button>
+      </div>
+    </div>
+
+    <div class="overlay hidden" id="gateOverlay" role="dialog" aria-modal="true" aria-labelledby="gateQ">
+      <div class="dialog candy gate-dialog">
+        <p class="eyebrow">보호자 확인</p>
+        <h2 id="gateQ">7 × 8 = ?</h2>
+        <p class="lead">밖으로 보내기 전에 어른이 풀어 주세요.</p>
+        <div class="gate-choices" id="gateChoices"></div>
+        <button type="button" class="ghost" id="gateCancel">취소</button>
+      </div>
+    </div>
+
+    <div class="toast float" id="floatToast" role="status" hidden></div>
+
     <script src="vendor/matter.min.js"></script>
     <script src="js/config.js"></script>
     <script src="js/save.js"></script>
     <script src="js/fun.js"></script>
     <script src="js/grip.js"></script>
     <script src="js/share.js"></script>
+    <script src="js/room.js"></script>
     <script src="js/audio.js"></script>
     <script src="js/particles.js"></script>
     <script src="js/draw.js"></script>

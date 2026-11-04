@@ -102,6 +102,7 @@ const files = [
   "js/fun.js",
   "js/grip.js",
   "js/share.js",
+  "js/room.js",
   "js/audio.js",
   "js/particles.js",
   "js/draw.js",
