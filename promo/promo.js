@@ -1,4 +1,5 @@
 // 몰랑크레인 홍보 영상 (세로 1080x1920 · 가로 1920x1080, 30fps, 22초). 가로형은 ?format=landscape 또는 PROMO.setFormat("landscape").
+// 편집본: ?cut=short(15초) · kids(아이용 20초) · parents(부모용 24.4초) 또는 PROMO.setCut(). 컷 없이 열면 기본 22초.
 // 게임의 실제 그림 함수(Draw, MyPlush, Room, Village)로 장면을 그린다.
 // renderFrame(t)는 t(초)만으로 그림이 정해지는 순수 함수다 (Math.random·Date.now 없음).
 (function () {
@@ -19,6 +20,12 @@
   let FORMAT = "vertical";
   let capSink = null; // 가로형에서 자막을 모아 두는 곳
   let BUBBLE_K = 1; // 말풍선 크기 배율 (가로형은 무대가 줄어드니 키운다)
+  // 편집본(컷): "full"(기본 22초) · "short"(15초) · "kids"(아이용 20초) · "parents"(부모용 24.4초). ?cut= 또는 PROMO.setCut()
+  let CUT = "full";
+  let capHook = null; // 컷마다 장면 속 자막을 바꾸거나 끈다 (기본 컷에서는 null이라 그림이 그대로)
+  let BEAR_HOME = false; // 짧은 컷: 사진 속 곰돌이를 옮기기 전 자리에 둔다
+  let END_PILL_K = 1; // 엔드 카드 안심 문구 크기 배율
+  let CL = null; // 부모님 체크 목록 표 (null이면 기본 22초 컷의 표)
 
   const C = {
     night: "#1a0b2c",
@@ -131,6 +138,11 @@
     const size = opts.size || 110;
     const alpha = opts.alpha == null ? 1 : opts.alpha;
     if (alpha <= 0) return;
+    if (capHook && !opts.own) {
+      const r = capHook(text, y, opts);
+      if (r === false) return;
+      if (typeof r === "string") text = r;
+    }
     // 가로형: 자막은 왼쪽 칸에 따로 모아 그린다 (세로형은 capSink가 없어 그대로)
     if (capSink) {
       capSink.push({ text, y, opts, alpha: ctx.globalAlpha * alpha });
@@ -683,7 +695,7 @@
     ctx.restore();
   }
 
-  function scene2(t) {
+  function scene2(t, o = {}) {
     const st = grabState(t);
     cardFrame(CARD, () => {
       ctx.save();
@@ -719,9 +731,9 @@
       finger(fx + away * 160, fy + away * 260, press, fa);
     }
     ripple(c.x, c.y, t - 2.6, C.mint, 150, 2);
-    dexStrip(t);
+    if (o.dex !== false) dexStrip(t);
     caption("한 번 톡! 쉬운 뽑기", 340, { size: 110, scale: popIn(t, 1.85) });
-    if (t >= 3.6) caption("인형 12종 + 비밀 친구", 462, { size: 62, sub: true, scale: popIn(t, 3.6) });
+    if (t >= 3.6 && o.dex !== false) caption("인형 12종 + 비밀 친구", 462, { size: 62, sub: true, scale: popIn(t, 3.6) });
   }
 
   // ================= 장면 3: 내 인형 만들기 (5.0–9.6) =================
@@ -1307,7 +1319,9 @@
   vcan.width = Math.round(VR.w);
   vcan.height = Math.round(VR.h);
   const vctx = vcan.getContext("2d");
-  const vw2s = (x, y) => pt(VR.x + x * VZ, VR.y + y * VZ);
+  let KCAM = null; // 아이용 컷 마을 카메라 { x, y, z } (null이면 기본 컷과 같은 전체 화면)
+  const vw2s = (x, y) =>
+    KCAM ? pt(VR.x + VR.w / 2 + (x - KCAM.x) * VZ * KCAM.z, VR.y + VR.h / 2 + (y - KCAM.y) * VZ * KCAM.z) : pt(VR.x + x * VZ, VR.y + y * VZ);
   const SEATS = Village.seats(4);
   const KONGI_FROM = { x: 168, y: 424 };
   const KONGI_TO = { x: 246, y: 306 }; // 화면 오른쪽·아래 UI 자리를 피한다
@@ -1407,7 +1421,10 @@
   function paintVillage(t, tod, walkers, opts) {
     vctx.setTransform(1, 0, 0, 1, 0, 0);
     vctx.clearRect(0, 0, vcan.width, vcan.height);
-    vctx.setTransform(VZ, 0, 0, VZ, 0, 0);
+    if (KCAM) {
+      const z = VZ * KCAM.z;
+      vctx.setTransform(z, 0, 0, z, vcan.width / 2 - KCAM.x * z, vcan.height / 2 - KCAM.y * z);
+    } else vctx.setTransform(VZ, 0, 0, VZ, 0, 0);
     Village.paint(vctx, walkers, Object.assign({ tod, time: t }, opts));
     if (opts.picnic) basket(vctx, Village.PICNIC.x, Village.PICNIC.y);
   }
@@ -1497,7 +1514,7 @@
     ctx.restore();
   }
 
-  function bubble(x, y, text, k, tailX, tailY) {
+  function bubble(x, y, text, k, tailX, tailY, who = "고양이") {
     if (k <= 0) return;
     ctx.save();
     // 휴대폰에서도 읽히게 Jua 46px, 최대 두 줄 (화면 좌표)
@@ -1530,7 +1547,7 @@
     ctx.font = "34px 'Jua'";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillText("고양이", 0, -h / 2 + 36);
+    ctx.fillText(who, 0, -h / 2 + 36);
     ctx.fillStyle = C.ink;
     ctx.font = `${FS}px 'Jua'`;
     lines.forEach((l, i) => ctx.fillText(l, 0, -h / 2 + 92 + i * 58));
@@ -1846,6 +1863,9 @@
   }
 
   function checklist(t) {
+    const rowT = CL ? CL.rowT : ROW_T;
+    const rowTxt = CL ? CL.txt : ROW_TXT;
+    const rowPlush = CL ? CL.plush : ROW_PLUSH;
     ctx.save();
     ctx.shadowColor = "rgba(0,0,0,0.45)";
     ctx.shadowBlur = 40;
@@ -1874,7 +1894,7 @@
     ctx.restore();
 
     for (let i = 0; i < 4; i++) {
-      const ts = ROW_T[i];
+      const ts = rowT[i];
       const y = ROW_Y[i];
       const appear = E.outCubic(seg(t, ts - 0.32, ts - 0.12));
       if (appear <= 0) continue;
@@ -1887,15 +1907,16 @@
       ctx.fill();
       const ix = 194;
       const k = seg(t, ts, ts + 0.2);
-      if (i === 0) iconAd(ix, y, k);
+      if (CL) CL.icon(i, ix, y, t, ts);
+      else if (i === 0) iconAd(ix, y, k);
       else if (i === 1) iconLock(ix, y);
       else if (i === 2) iconMath(ix, y, t >= ts ? 1 : 0, ts, t);
       else iconClock(ix, y, seg(t, ts - 0.3, ts + 0.15));
       ctx.textAlign = "left";
       ctx.textBaseline = "middle";
       ctx.fillStyle = C.ink;
-      fitFont(ROW_TXT[i], 56, 846 - 330);
-      ctx.fillText(ROW_TXT[i], 330, y + 3);
+      fitFont(rowTxt[i], 56, 846 - 330);
+      ctx.fillText(rowTxt[i], 330, y + 3);
       // 도장 자리
       ctx.strokeStyle = "rgba(90,45,134,0.25)";
       ctx.lineWidth = 4;
@@ -1964,7 +1985,7 @@
         ctx.globalAlpha = 1 - seg(out, 0.6, 1);
         ctx.translate(px, py);
         ctx.scale(2.3, 2.3);
-        Draw.plush(ctx, { type: ROW_PLUSH[i], x: 0, y: 0, radius: 22, react: "success", ...sq });
+        Draw.plush(ctx, { type: rowPlush[i], x: 0, y: 0, radius: 22, react: "success", ...sq });
         ctx.restore();
       }
     }
@@ -2140,20 +2161,22 @@
       ctx.restore();
     }
     const pk = E.outBack(seg(u, 20.2, 20.45));
-    if (pk > 0) pill(540, 1380, "광고 없음 · 개인정보 수집 없음", { size: 48, bg: C.mint, color: C.ink, scale: pk, pad: 44 });
+    if (pk > 0) pill(540, 1380, "광고 없음 · 개인정보 수집 없음", { size: 48 * END_PILL_K, bg: C.mint, color: C.ink, scale: pk, pad: 44 * END_PILL_K });
   }
 
   // ---------- 장면 묶기 ----------
   function renderFrame(t) {
-    t = clamp(t, 0, DUR);
+    const cut = CUTS[CUT];
+    t = clamp(t, 0, cut.dur);
     // Draw.plush의 하트 고리 맥박을 t로 고정 (마지막 0.5초 정지 구간에서는 시계도 멈춘다)
-    const tc = Math.min(t, HOLD_T);
+    const tc = Math.min(t, cut.hold);
     try {
       Object.defineProperty(performance, "now", { value: () => tc * 1000, configurable: true, writable: true });
     } catch (e) {
       /* ignore */
     }
-    if (FORMAT === "landscape") renderLandscape(t);
+    if (CUT !== "full") renderCut(t);
+    else if (FORMAT === "landscape") renderLandscape(t);
     else {
       BUBBLE_K = 1;
       renderVertical(t);
@@ -2334,7 +2357,7 @@
     const list = ROOM_BASE.map((p) => {
       const q = Object.assign({}, p);
       if (p.type === "mine") q.pets = p.pets + 3;
-      if (p.type === "bear") {
+      if (p.type === "bear" && !BEAR_HOME) {
         q.x = 132;
         q.y = 256;
       }
@@ -2579,7 +2602,7 @@
       ctx.restore();
     }
     const pk = E.outBack(seg(u, 20.2, 20.45));
-    if (pk > 0) pill(LW / 2, 942, "광고 없음 · 개인정보 수집 없음", { size: 50, bg: C.mint, color: C.ink, scale: pk, pad: 48 });
+    if (pk > 0) pill(LW / 2, 942, "광고 없음 · 개인정보 수집 없음", { size: 50 * END_PILL_K, bg: C.mint, color: C.ink, scale: pk, pad: 48 * END_PILL_K });
   }
 
   function renderLandscape(t) {
@@ -2715,11 +2738,1507 @@
     }
   }
 
+  // ================= 편집본(컷): 짧은 15초 · 아이용 20초 · 부모용 24.4초 =================
+  // 기본 22초 컷의 장면 함수를 시간만 바꿔 다시 쓰고, 세로·가로 모두 같은 표로 그린다.
+  // 기본 컷(CUT === "full")은 이 아래 코드를 전혀 거치지 않는다.
+  const CUTS = {
+    full: { dur: DUR, hold: HOLD_T },
+    short: { dur: 15, hold: 14.5 },
+    kids: { dur: 20, hold: 19.5 },
+    parents: { dur: 24.4, hold: 23.9 },
+  };
+  const isL = () => FORMAT === "landscape";
+  // outBack(0)은 0이 아니라 2.2e-16이라, 위치만 움직이는 곳에서는 시작 전에 그려지지 않게 0으로 자른다
+  const OB = (s) => (s <= 0 ? 0 : E.outBack(s));
+  function BG(t, par = 0, flash = false) {
+    if (isL()) backdropL(t, par, flash);
+    else backdrop(t, par, flash);
+  }
+  // 세로형은 그대로, 가로형은 오른쪽 무대에 놓고 자막은 왼쪽 칸으로
+  function STG(st, fn) {
+    if (isL()) staged(st, fn);
+    else fn();
+  }
+  const SLIDE_D = () => (isL() ? 1960 : 1100);
+  const SINK_D = () => (isL() ? 1200 : 1400);
+  const scr = (st, p) => (isL() ? toScreen(st, p) : p);
+  const titleAt = () => (isL() ? pt(LW / 2, TITLE_Y_L) : pt(540, TITLE_Y));
+  function endCard(u) {
+    if (isL()) scene7L(u);
+    else scene7(u);
+  }
+
+  // 구간별 시간 재매핑 표: [t0, t1, u0, u1] (컷 시간 t → 원래 장면 시간 u)
+  function remap(t, table) {
+    for (const [t0, t1, u0, u1] of table) if (t <= t1) return lerp(u0, u1, seg(t, t0, t1));
+    const l = table[table.length - 1];
+    return l[3];
+  }
+  // 소리용 역매핑: 원래 시간 u가 들어 있는 첫 구간의 컷 시간 (없으면 null → 그 소리는 뺀다)
+  function unmap(u, table) {
+    for (const [t0, t1, u0, u1] of table) if (u >= u0 - 1e-9 && u <= u1 + 1e-9) return lerp(t0, t1, (u - u0) / (u1 - u0));
+    return null;
+  }
+
+  // 화면 전체가 왼쪽으로 밀리며 다음 카드가 들어온다 (기본 컷 4.85–5.12와 같은 움직임)
+  // win: 가로형에서 왼쪽 자막이 그대로 있을 때, 카드를 오른쪽 무대 안에서만 밀어 자막 위를 지나가지 않게 한다
+  const WIN_X = 930;
+  function slideSwap(t, t0, t1, outFn, inFn, par0 = 0, par1 = -320, stOut = ST, stIn = ST, win = false) {
+    const k = E.inOutCubic(seg(t, t0, t1));
+    const w = win && isL();
+    const D = w ? 1000 : SLIDE_D();
+    BG(t, lerp(par0, par1, k));
+    ctx.save();
+    if (w) {
+      ctx.beginPath();
+      ctx.rect(WIN_X, 0, LW - WIN_X, H);
+      ctx.clip();
+    }
+    ctx.save();
+    ctx.translate(-D * k, 0);
+    STG(stOut, outFn);
+    ctx.restore();
+    ctx.save();
+    ctx.translate(D * (1 - k), 0);
+    STG(stIn, inFn);
+    ctx.restore();
+    ctx.restore();
+  }
+
+  // 미니 기계 속 콩이에서 하트가 커지며 방이 열린다 (기본 컷 9.45–9.8)
+  function heartIris(t, k, outFn, inFn, par = -320, parIn = 0) {
+    BG(t, par);
+    STG(ST, outFn);
+    const c = scr(ST, KONGI_MINI());
+    const R = (isL() ? 3200 : 2800) * k;
+    ctx.save();
+    Draw.heart(ctx, c.x, c.y, R);
+    ctx.clip();
+    BG(t, parIn);
+    STG(ST, inFn);
+    ctx.restore();
+    if (k < 1) {
+      ctx.save();
+      ctx.strokeStyle = C.pink;
+      ctx.lineWidth = 14;
+      ctx.shadowColor = C.pink;
+      ctx.shadowBlur = 24;
+      Draw.heart(ctx, c.x, c.y, R);
+      ctx.stroke();
+      ctx.restore();
+    }
+  }
+
+  // 엔드 카드로 날아가는 노란 별 (기본 컷 18.4–18.6과 같은 그림)
+  function spinStar(x, y, t, r, a) {
+    if (a <= 0) return;
+    ctx.save();
+    ctx.globalAlpha = a;
+    ctx.translate(x, y);
+    ctx.rotate(t * 8);
+    ctx.shadowColor = C.lemon;
+    ctx.shadowBlur = 40;
+    ctx.fillStyle = C.lemon;
+    ctx.strokeStyle = "#c48a00";
+    ctx.lineWidth = 5;
+    Draw.star(ctx, 0, 0, r, 5, 0.5);
+    ctx.fill();
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  // 자막 없이 무대만 그린다 (접히는 카드 안의 자막은 따로 그린다)
+  function stageMuted(st, fn) {
+    const prev = capSink;
+    capSink = [];
+    ctx.save();
+    if (isL()) {
+      ctx.translate(st.x, st.y);
+      ctx.scale(st.s, st.s);
+      ctx.translate(-st.fx, -st.fy);
+    }
+    fn();
+    ctx.restore();
+    capSink = prev;
+  }
+
+  // 카드가 한 점(originV, 세로형 좌표)으로 쏙 접히고 노란 별이 제목 자리로 간다
+  function foldInto(t, t0, t1, st, originV, cardFn, capFn) {
+    const o = scr(st, originV);
+    const k = seg(t, t0, t1 - 0.06);
+    const s = Math.min(1, 1 - E.inBack(k));
+    if (s > 0.01) {
+      ctx.save();
+      ctx.globalAlpha = 1 - seg(k, 0.6, 1);
+      ctx.translate(o.x, o.y);
+      ctx.scale(s, s);
+      ctx.translate(-o.x, -o.y);
+      stageMuted(st, cardFn);
+      ctx.restore();
+    }
+    if (capFn) STG(st, () => capFn(1 - seg(k, 0, 0.6)));
+    const f = E.inOutCubic(seg(t, t1 - 0.14, t1));
+    const T = titleAt();
+    spinStar(lerp(o.x, T.x, f), lerp(o.y, T.y, f), t, 30 + 40 * Math.sin(seg(t, t0, t1) * Math.PI) + 10, seg(t, t0 + 0.02, t0 + 0.08));
+  }
+
+  // 자막 표: { at, end, text, sub, y, size } — at에 톡 튀어나오고 end 직전에 흐려진다
+  function capsFrom(t, list, a = 1, ys = { head: 340, sub: 462 }) {
+    for (const c of list) {
+      if (t < c.at || t >= c.end) continue;
+      const fade = c.end > 90 ? 1 : 1 - seg(t, c.end - 0.12, c.end);
+      const y = c.y || (c.sub ? ys.sub : ys.head);
+      caption(c.text, y, {
+        own: true,
+        sub: !!c.sub,
+        size: c.size || (c.sub ? 62 : 112),
+        scale: c.noPop ? 1 : popIn(t, c.at, c.sub ? 0.25 : 0.28),
+        alpha: a * fade * (c.fadeIn ? seg(t, c.at, c.at + c.fadeIn) : 1),
+      });
+    }
+  }
+
+  // 손가락 길: [[t, x, y], ...] 사이를 부드럽게 잇는다
+  function kf(t, keys) {
+    if (t <= keys[0][0]) return pt(keys[0][1], keys[0][2]);
+    for (let i = 1; i < keys.length; i++) {
+      const [ta, xa, ya] = keys[i - 1];
+      const [tb, xb, yb] = keys[i];
+      if (t <= tb) {
+        const k = E.inOutCubic(seg(t, ta, tb));
+        return pt(lerp(xa, xb, k), lerp(ya, yb, k));
+      }
+    }
+    const l = keys[keys.length - 1];
+    return pt(l[1], l[2]);
+  }
+  const pressAt = (t, times, d = 0.1) => (times.some((a) => t >= a - 0.02 && t < a + d) ? 1 : 0);
+
+  // ---------- 짧은 컷 (15초) ----------
+  const SHORT_M3 = [
+    [3.87, 4.8, 5.0, 6.3],
+    [4.8, 5.85, 6.3, 8.4],
+    [5.85, 6.85, 8.4, 9.45],
+    [6.85, 7.2, 9.45, 9.8],
+  ];
+  const SHORT_M4 = [
+    [7.2, 8.0, 9.8, 10.6],
+    [8.0, 8.3, 11.6, 12.05],
+  ];
+  const SHORT_M5 = [
+    [8.3, 9.0, 12.05, 12.75],
+    [9.0, 9.95, 12.75, 13.98],
+    [9.95, 10.1, 13.98, 14.4],
+    [10.1, 11.5, 14.4, 15.75],
+    [11.5, 12.0, 15.75, 16.2],
+  ];
+  const SHORT_END = 6.6; // 엔드 카드: u = t + 6.6
+
+  // 짧은 컷 마을 자막: 제목은 장면 5 그대로, 작은 줄은 컷 시간표로 (숨바꼭질을 1.2초 남짓 보여 준다)
+  const SHORT_V_SUBS = [
+    { at: 8.3, end: 8.95, text: "톡! 말 걸기", sub: true, y: 455, size: 64 },
+    { at: 8.95, end: 10.12, text: "숨바꼭질", sub: true, y: 455, size: 64 },
+    { at: 10.12, end: 99, text: "소풍 가자!", sub: true, y: 455, size: 64 },
+  ];
+  function shortVillageCaption(t, u) {
+    const h = capHook;
+    capHook = (text, y, o) => !o.sub;
+    try {
+      scene5Caption(u);
+    } finally {
+      capHook = h;
+    }
+    capsFrom(t, SHORT_V_SUBS);
+  }
+
+  function renderShort(t) {
+    BEAR_HOME = true;
+    if (t < 1.8) {
+      BG(t, 0, t >= 1.4 && t < 1.4 + 2 / FPS);
+      STG(ST, () => scene1(t));
+    } else if (t < 3.6) {
+      BG(t);
+      STG(ST, () => scene2(t, { dex: false }));
+    } else if (t < 3.87) {
+      slideSwap(t, 3.6, 3.87, () => scene2(t, { dex: false }), () => scene3(5.0));
+    } else if (t < 6.85) {
+      BG(t, -320);
+      const u = remap(t, SHORT_M3);
+      STG(ST, () => scene3(u));
+    } else if (t < 7.2) {
+      const u = remap(t, SHORT_M3);
+      heartIris(t, E.inCubic(seg(u, 9.45, 9.8)), () => scene3(u), () => scene4(Math.max(u, 9.6)));
+    } else if (t < 8.0) {
+      BG(t);
+      const u = remap(t, SHORT_M4);
+      STG(ST, () => scene4(u));
+    } else if (t < 8.3) {
+      BG(t);
+      const u = remap(t, SHORT_M4);
+      STG(ST, () => polaroid(u));
+    } else if (t < 11.5) {
+      BG(t);
+      const u = remap(t, SHORT_M5);
+      STG(ST, () => {
+        scene5(u);
+        shortVillageCaption(t, u);
+      });
+    } else if (t < 12.0) {
+      BG(t);
+      const u = remap(t, SHORT_M5);
+      const sink = E.inCubic(seg(u, 15.8, 16.15));
+      const dark = seg(u, 15.75, 16.0);
+      ctx.save();
+      ctx.translate(0, SINK_D() * sink);
+      STG(ST, () => scene5(u, dark));
+      ctx.restore();
+      ctx.save();
+      ctx.globalAlpha = 1 - seg(t, 11.5, 11.65);
+      STG(ST, () => shortVillageCaption(t, u));
+      ctx.restore();
+      // 콩이 자리에서 노란 별이 나와 제목 자리로 (12.0에 닿는다)
+      const o = scr(ST, vw2s(KONGI_TO.x, KONGI_TO.y));
+      const T = titleAt();
+      const f = E.inOutCubic(seg(t, 11.6, 12.0));
+      spinStar(lerp(o.x, T.x, f), lerp(o.y, T.y, f), t, 30 + 40 * Math.sin(seg(t, 11.5, 12.0) * Math.PI) + 10, seg(t, 11.52, 11.6));
+    } else {
+      const tc = Math.min(t, CUTS.short.hold);
+      BG(tc);
+      endCard(tc + SHORT_END);
+    }
+  }
+
+  // ---------- 아이용 컷 (20초) ----------
+  const KIDS_COPY = {
+    "한 번 톡! 쉬운 뽑기": "톡! 눌러서 뽑기",
+    "인형 12종 + 비밀 친구": "친구 12명 + 비밀 친구",
+    "기계 속에 내 인형이!": "기계 속에 콩이가!",
+  };
+  const K_SPOT = {};
+  Village.spots().forEach((s) => (K_SPOT[s.id] = s));
+  const K_BUSH = Village.BUSHES.find((b) => b.id === "bushD");
+  const K_HIDE_FROM = { x: 120, y: 250 };
+  const K_POP_TO = { x: 70, y: 258 };
+  const BEAR_FAV = Village.favorite(Village.persona("bear")); // calm → honey (게임의 실제 표)
+  const LOVE_LINE = I18N.pick("picnic.love", {}, () => 0);
+  const TRAY = { y: 1580, xs: [640, 760, 880], snacks: [BEAR_FAV, "berry", "cookie"] };
+  const OUT_V = [1000, 1760];
+  // 마을 카메라: 숨바꼭질은 덤불D·미끄럼틀·덤불A 쪽으로 가까이, 소풍과 걷기는 돗자리 둘레로
+  const K_WIDE = { x: Village.W / 2, y: Village.H / 2, z: 1 };
+  const K_HIDE_CAM = { x: 104, y: 318, z: 1.75 };
+  const K_PICNIC_CAM = { x: 170, y: 292, z: 1.3 };
+  function kidsCam(t) {
+    const a = E.inOutCubic(seg(t, 11.3, 11.85));
+    const b = E.inOutCubic(seg(t, 13.85, 14.45));
+    const from = b > 0 ? K_HIDE_CAM : K_WIDE;
+    const to = b > 0 ? K_PICNIC_CAM : K_HIDE_CAM;
+    const k = b > 0 ? b : a;
+    // 줌은 로그로 보간하고, 중심은 화면 속 점이 곧게 움직이도록 1/z에 맞춰 옮긴다
+    const z = Math.exp(lerp(Math.log(from.z), Math.log(to.z), k));
+    const w = (1 / z - 1 / from.z) / (1 / to.z - 1 / from.z);
+    return { x: lerp(from.x, to.x, w), y: lerp(from.y, to.y, w), z };
+  }
+  function withKCam(t, fn) {
+    const prev = KCAM;
+    KCAM = kidsCam(t);
+    try {
+      return fn();
+    } finally {
+      KCAM = prev;
+    }
+  }
+  const K_WRONG = ["slide", "bushA"]; // 틀린 곳 두 군데 (숨은 덤불D 가까이라 한 화면에 들어온다)
+
+  function kSeat(wk, idx, t) {
+    const k = E.inOutCubic(seg(t, 14.2, 14.75));
+    if (k <= 0) return wk;
+    const s = SEATS[idx];
+    wk.x = lerp(wk.x, s.x, k);
+    wk.y = lerp(wk.y, s.y, k);
+    wk.walkT = t;
+    if (k >= 1) {
+      wk.talking = true;
+      wk.wait = 1;
+    }
+    return wk;
+  }
+
+  function kidsBunny(t) {
+    const b = { type: "bunny", name: "토끼", pets: 11, x: K_HIDE_FROM.x, y: K_HIDE_FROM.y, dir: -1, walkT: t, wait: 1, talking: false };
+    if (t < 11.35) {
+      b.x += Math.sin(t * 1.5) * 4;
+    } else if (t < 11.72) {
+      const k = E.inOutCubic(seg(t, 11.35, 11.72));
+      b.x = lerp(K_HIDE_FROM.x, K_BUSH.x + 8, k);
+      b.y = lerp(K_HIDE_FROM.y, K_BUSH.y + 6, k);
+      b.wait = 0;
+    } else if (t < 13.5) {
+      b.hidden = true;
+      b.x = K_BUSH.x;
+      b.y = K_BUSH.y;
+    } else {
+      const p = E.outCubic(seg(t, 13.5, 13.75));
+      b.x = lerp(K_BUSH.x, K_POP_TO.x, p);
+      b.y = lerp(K_BUSH.y, K_POP_TO.y, p) - Math.sin(p * Math.PI) * 50;
+      b.dir = 1;
+      b.talking = true;
+      return kSeat(b, 1, t);
+    }
+    return b;
+  }
+
+  function kidsKongi(t) {
+    if (t < 16.6) return { type: "mine", name: "콩이", pets: 12, x: KONGI_FROM.x + Math.sin(t * 1.2) * 4, y: KONGI_FROM.y, dir: 1, walkT: t, wait: 1, talking: false };
+    const p = alongPath(E.inOutCubic(seg(t, 16.6, 17.15)));
+    return { type: "mine", name: "콩이", pets: 12, x: p.x, y: p.y, dir: p.dir, walkT: t, wait: t < 17.15 ? 0 : 1, talking: false };
+  }
+
+  function kidsWalkers(t) {
+    const tw = Math.min(t, 14.2);
+    const ws = [];
+    ws.push(kSeat(loopWalker("cat", "고양이", 10, 206, 236, 16, 6, 1.6, 0.2, tw), 0, t));
+    const bear = kSeat(loopWalker("bear", "곰돌이", t >= 15.7 ? 8 : 6, 112, 300, 26, 8, 1.3, 1.1, tw), 2, t);
+    ws.push(bear);
+    const bunny = kidsBunny(t);
+    if (!bunny.hidden) ws.push(bunny);
+    ws.push(kSeat(loopWalker("chick", "병아리", 3, 214, 316, 12, 5, 1.8, 0.6, tw), 3, t));
+    ws.push(loopWalker("penguin", "펭귄", 4, 322, 318, 8, 5, 1.4, 0.9, t));
+    ws.push(kidsKongi(t));
+    return ws;
+  }
+
+  // 덤불 속으로 쏙 (게임 그림 함수로 직접 줄여 그린다)
+  function kidsVillageExtra(t) {
+    const k = seg(t, 11.72, 11.86);
+    if (k > 0 && k < 1) {
+      const s = 1 - E.inBack(k);
+      if (s > 0.01) {
+        vctx.save();
+        vctx.translate(K_BUSH.x + 8, K_BUSH.y + 6);
+        vctx.scale(s, s);
+        Draw.plush(vctx, { type: "bunny", x: 0, y: 0, radius: Village.RADIUS, react: "idle" });
+        vctx.restore();
+      }
+    }
+  }
+
+  function leafBurst(x, y, dt) {
+    if (dt < 0 || dt > 0.6) return;
+    const r = mulberry32(SEED + 61);
+    const k = E.outCubic(dt / 0.6);
+    ctx.save();
+    ctx.globalAlpha = 1 - seg(dt, 0.3, 0.6);
+    for (let i = 0; i < 9; i++) {
+      const a = r() * TAU;
+      const d = 60 + r() * 70;
+      ctx.save();
+      ctx.translate(x + Math.cos(a) * d * k, y + Math.sin(a) * d * k - 30 * k);
+      ctx.rotate(a + dt * 6);
+      ctx.fillStyle = i % 3 ? "#5fcf7e" : "#9be27a";
+      ctx.beginPath();
+      ctx.ellipse(0, 0, 16, 8, 0, 0, TAU);
+      ctx.fill();
+      ctx.restore();
+    }
+    ctx.restore();
+  }
+
+  // 간식 그림 (그림 문자 없이 캔버스 도형만)
+  function snackBerry(x, y, s) {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.scale(s, s);
+    ctx.fillStyle = "#ff4f6d";
+    ctx.strokeStyle = "#b8213d";
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(0, 24);
+    ctx.bezierCurveTo(-26, 8, -24, -16, -10, -16);
+    ctx.quadraticCurveTo(0, -18, 10, -16);
+    ctx.bezierCurveTo(24, -16, 26, 8, 0, 24);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = "#ffe36a";
+    for (const [sx, sy] of [[-8, -4], [6, -6], [-2, 6], [10, 6], [-10, 8], [2, 15]]) {
+      ctx.beginPath();
+      ctx.ellipse(sx, sy, 2, 3, 0, 0, TAU);
+      ctx.fill();
+    }
+    ctx.fillStyle = "#4fbf6a";
+    for (let i = 0; i < 4; i++) {
+      ctx.save();
+      ctx.translate(0, -17);
+      ctx.rotate(-1.2 + i * 0.8);
+      ctx.beginPath();
+      ctx.ellipse(0, -6, 4, 9, 0, 0, TAU);
+      ctx.fill();
+      ctx.restore();
+    }
+    ctx.restore();
+  }
+  function snackCookie(x, y, s) {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.scale(s, s);
+    ctx.fillStyle = "#e9b46a";
+    ctx.strokeStyle = "#a8743a";
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(0, 0, 24, 0, TAU);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = "#6b3f22";
+    for (const [cx, cy] of [[-9, -8], [8, -10], [-2, 4], [11, 7], [-12, 9]]) {
+      ctx.beginPath();
+      ctx.arc(cx, cy, 4, 0, TAU);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+  function drawSnack(id, x, y, s) {
+    if (id === "honey") honeyPot(x, y + 2, s * 1.05);
+    else if (id === "berry") snackBerry(x, y, s);
+    else snackCookie(x, y, s);
+  }
+
+  function snackTray(t) {
+    const up = OB(seg(t, 14.8, 15.0));
+    const down = E.inCubic(seg(t, 16.2, 16.4));
+    if (up <= 0 || down >= 1) return;
+    const dy = (1 - up) * 200 + down * 220;
+    ctx.save();
+    ctx.translate(0, dy);
+    ctx.shadowColor = "rgba(30,8,40,0.35)";
+    ctx.shadowBlur = 20;
+    ctx.fillStyle = C.cream;
+    ctx.beginPath();
+    ctx.roundRect(566, TRAY.y - 68, 388, 136, 44);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.strokeStyle = C.pink;
+    ctx.lineWidth = 6;
+    ctx.stroke();
+    TRAY.xs.forEach((x, i) => {
+      const id = TRAY.snacks[i];
+      const picked = i === 0 && t >= 15.3;
+      const b = i === 0 ? spring(t - 15.3) : 0;
+      ctx.save();
+      ctx.translate(x, TRAY.y);
+      ctx.scale(1 + 0.18 * b, 1 - 0.18 * b);
+      ctx.fillStyle = "#ffffff";
+      ctx.strokeStyle = i === 0 && t >= 15.25 ? C.lemon : "rgba(90,45,134,0.3)";
+      ctx.lineWidth = i === 0 && t >= 15.25 ? 9 : 4;
+      ctx.beginPath();
+      ctx.arc(0, 0, 54, 0, TAU);
+      ctx.fill();
+      ctx.stroke();
+      ctx.globalAlpha = picked ? 0.3 : 1;
+      drawSnack(id, 0, 0, 1.5);
+      ctx.restore();
+    });
+    ctx.restore();
+  }
+
+  function kidsVillage(t, sink = 0) {
+    return withKCam(t, () => kidsVillageCam(t, sink));
+  }
+  function kidsVillageCam(t, sink = 0) {
+    const walkers = kidsWalkers(t);
+    const opts = {
+      picnic: t >= 14.2,
+      rustle: t >= 12.85 && t < 13.5 ? "bushD" : null,
+      checked: t >= 13.5 ? [] : t >= 12.78 ? K_WRONG : t >= 12.38 ? K_WRONG.slice(0, 1) : [],
+      fx: [],
+    };
+    const af = t - 17.15;
+    if (af > 0 && af < 0.7) opts.fx.push({ x: KONGI_TO.x + 14, y: KONGI_TO.y - 30 - af * 40, life: 1 - af / 0.7 });
+    const evening = seg(t, 14.2, 14.45);
+    const bear = walkers.find((w) => w.type === "bear");
+    const bb = vw2s(bear.x, bear.y);
+    cardFrame(VR, () => {
+      paintVillage(t, "day", walkers, opts);
+      kidsVillageExtra(t);
+      ctx.drawImage(vcan, VR.x, VR.y, VR.w, VR.h);
+      if (evening > 0) {
+        paintVillage(t, "evening", walkers, opts);
+        kidsVillageExtra(t);
+        ctx.globalAlpha = evening;
+        ctx.drawImage(vcan, VR.x, VR.y, VR.w, VR.h);
+        ctx.globalAlpha = 1;
+      }
+      if (sink > 0) {
+        ctx.fillStyle = `rgba(20, 8, 50, ${0.6 * sink})`;
+        ctx.fillRect(0, 0, W, H);
+      }
+      const bush = vw2s(K_BUSH.x, K_BUSH.y);
+      leafBurst(bush.x, bush.y - 10, t - 11.8);
+      // 틀린 곳 두 번 → 부스럭 → 찾았다
+      const sl = vw2s(K_SPOT[K_WRONG[0]].x, K_SPOT[K_WRONG[0]].y);
+      const tr = vw2s(K_SPOT[K_WRONG[1]].x, K_SPOT[K_WRONG[1]].y);
+      ripple(sl.x, sl.y, t - 12.35, C.lemon, 100, 2);
+      ripple(tr.x, tr.y, t - 12.75, C.lemon, 100, 2);
+      ripple(bush.x, bush.y, t - 13.45, C.lemon, 100, 2);
+      // 부스럭 힌트: 노란 고리가 두근두근, 잎이 튀고, 덤불 위에 "부스럭!"
+      if (t >= 12.85 && t < 13.5) {
+        const hk = seg(t, 12.85, 12.95) * (1 - seg(t, 13.4, 13.5));
+        const beat = 0.5 + 0.5 * Math.sin((t - 12.85) * TAU * 3);
+        ctx.save();
+        ctx.globalAlpha = hk * (0.55 + 0.45 * beat);
+        ctx.strokeStyle = C.lemon;
+        ctx.shadowColor = C.lemon;
+        ctx.shadowBlur = 24;
+        ctx.lineWidth = 10;
+        ctx.beginPath();
+        ctx.arc(bush.x, bush.y - 6, 92 + 10 * beat, 0, TAU);
+        ctx.stroke();
+        ctx.restore();
+        ctx.save();
+        ctx.globalAlpha = hk;
+        pill(bush.x + 70, bush.y - 150, "부스럭!", { size: 50, bg: C.lemon, color: C.ink, stroke: "#c47a12", scale: popIn(t, 12.85, 0.2) * (1 + 0.05 * beat), pad: 30 });
+        ctx.restore();
+      }
+      leafBurst(bush.x, bush.y - 10, t - 12.85);
+      leafBurst(bush.x, bush.y - 10, t - 13.15);
+      for (const [at, p] of [
+        [12.38, sl],
+        [12.78, tr],
+      ]) {
+        const a = seg(t, at, at + 0.06) * (1 - seg(t, at + 0.36, at + 0.44));
+        if (a > 0) {
+          ctx.save();
+          ctx.globalAlpha = a;
+          pill(p.x, p.y - 118, "없네~", { size: 46, bg: C.cream, color: C.ink, stroke: C.pink, scale: popIn(t, at, 0.2), pad: 30 });
+          ctx.restore();
+        }
+      }
+      if (t >= 13.5) {
+        const bun = walkers.find((w) => w.type === "bunny");
+        const bp = vw2s(bun.x, bun.y);
+        sparkRing(bp.x, bp.y, t - 13.65, 90, 14);
+        burst(bp.x, bp.y - 30, t - 13.55, { stars: 6, hearts: 4, dist: 170, seed: SEED + 62, scale: 0.65, core: false });
+      }
+      // 소풍: 간식 쟁반 → 꿀단지 → 곰돌이 +2
+      snackTray(t);
+      const chip = pt(TRAY.xs[0], TRAY.y);
+      const top = pt(bb.x, bb.y - 46);
+      const hk = seg(t, 15.36, 15.6);
+      if (t >= 15.3 && t < 15.7) {
+        let x;
+        let y;
+        let s = 1.5;
+        if (t < 15.36) {
+          x = chip.x;
+          y = chip.y;
+        } else if (t < 15.6) {
+          const e = E.inOutCubic(hk);
+          x = lerp(chip.x, top.x, e);
+          y = lerp(chip.y, top.y, e) - Math.sin(hk * Math.PI) * 140;
+          s = 1.5 + 0.2 * Math.sin(hk * Math.PI);
+        } else {
+          x = top.x;
+          y = top.y;
+          s = 1.5 * (1 - E.inBack(seg(t, 15.6, 15.7)));
+        }
+        if (s > 0.01) honeyPot(x, y, s);
+      }
+      const lk = t - 15.7;
+      if (lk > 0 && lk < 0.9) {
+        ctx.save();
+        ctx.globalAlpha = 1 - seg(lk, 0.6, 0.9);
+        const y = bb.y - 90 - lk * 60;
+        const s = 1 + 0.25 * spring(lk);
+        for (let i = 0; i < 2; i++) {
+          ctx.fillStyle = "#ff5c9a";
+          ctx.strokeStyle = "#fff";
+          ctx.lineWidth = 4;
+          Draw.heart(ctx, bb.x - 34 + i * 60, y, 30 * s);
+          ctx.fill();
+          ctx.stroke();
+        }
+        ctx.font = "72px 'Jua'";
+        ctx.textAlign = "left";
+        ctx.textBaseline = "middle";
+        ctx.lineJoin = "round";
+        ctx.lineWidth = 12;
+        ctx.strokeStyle = C.grape;
+        ctx.strokeText("+2", bb.x + 56, y - 12);
+        ctx.fillStyle = C.lemon;
+        ctx.fillText("+2", bb.x + 56, y - 12);
+        ctx.restore();
+        sparkRing(bb.x, bb.y, lk, 80, 12);
+      }
+      // 땅 톡 → 콩이가 콩콩
+      const tg = vw2s(KONGI_TO.x, KONGI_TO.y);
+      ripple(tg.x, tg.y, t - 16.55, C.lemon, 90, 2);
+      if (t >= 16.55 && t < 17.2) {
+        ctx.save();
+        ctx.globalAlpha = 0.65 * (1 - seg(t, 17.05, 17.2));
+        ctx.fillStyle = C.lemon;
+        Draw.star(ctx, tg.x, tg.y, 20, 4, 0.45);
+        ctx.fill();
+        ctx.restore();
+      }
+    });
+    // 손가락 (카드 밖에서 들어온다)
+    const tr = vw2s(K_SPOT[K_WRONG[1]].x, K_SPOT[K_WRONG[1]].y);
+    const sl = vw2s(K_SPOT[K_WRONG[0]].x, K_SPOT[K_WRONG[0]].y);
+    const bu = vw2s(K_BUSH.x, K_BUSH.y);
+    const tg = vw2s(KONGI_TO.x, KONGI_TO.y);
+    const chip = pt(TRAY.xs[0], TRAY.y);
+    let fa = 0;
+    let fp = null;
+    let press = 0;
+    if (t < 14.0) {
+      fa = seg(t, 11.95, 12.05) * (1 - seg(t, 13.6, 13.8));
+      fp = kf(t, [
+        [11.95, ...OUT_V],
+        [12.3, sl.x, sl.y],
+        [12.45, sl.x, sl.y],
+        [12.7, tr.x, tr.y],
+        [12.95, tr.x, tr.y],
+        [13.4, bu.x, bu.y],
+        [13.55, bu.x, bu.y],
+        [13.8, ...OUT_V],
+      ]);
+      press = pressAt(t, [12.35, 12.75, 13.45]);
+    } else if (t < 16.0) {
+      const top = pt(bb.x, bb.y - 46);
+      fa = seg(t, 15.0, 15.08) * (1 - seg(t, 15.66, 15.85));
+      if (t < 15.36) fp = kf(t, [[15.0, ...OUT_V], [15.26, chip.x, chip.y]]);
+      else if (t < 15.6) {
+        const hk = seg(t, 15.36, 15.6);
+        const e = E.inOutCubic(hk);
+        fp = pt(lerp(chip.x, top.x, e), lerp(chip.y, top.y, e) - Math.sin(hk * Math.PI) * 140);
+      } else fp = kf(t, [[15.62, top.x, top.y], [15.85, ...OUT_V]]);
+      press = t >= 15.28 && t < 15.6 ? 1 : 0;
+      if (fp && t >= 15.36 && t < 15.6) fp = pt(fp.x + 26, fp.y + 34);
+    } else {
+      fa = seg(t, 16.3, 16.38) * (1 - seg(t, 16.7, 16.9));
+      fp = kf(t, [[16.3, ...OUT_V], [16.5, tg.x, tg.y], [16.65, tg.x, tg.y], [16.9, ...OUT_V]]);
+      press = pressAt(t, [16.55]);
+    }
+    if (fa > 0 && fp) finger(fp.x, fp.y, press, fa);
+    // 곰돌이 말풍선 (미리 쓴 대사)
+    const bk = OB(seg(t, 15.75, 15.95)) * (1 - seg(t, 16.25, 16.38));
+    if (bk > 0) bubble(540, bb.y - 350, LOVE_LINE, bk * (isL() ? 1.2 : 1), bb.x, bb.y - 60, bear.name);
+  }
+
+  const KIDS_CAPS = [
+    { at: 11.32, end: 13.5, text: "숨바꼭질!" },
+    { at: 13.5, end: 14.7, text: "찾았다!" },
+    { at: 14.7, end: 16.5, text: "소풍 가자!" },
+    { at: 16.5, end: 99, text: "톡! 이리 와!" },
+    { at: 11.8, end: 13.5, text: "어디 숨었지?", sub: true },
+    { at: 14.95, end: 16.5, text: "좋아하는 간식은 하트 2개!", sub: true },
+    { at: 16.6, end: 99, text: "콩이가 콩콩 따라와요", sub: true },
+  ];
+  const kidsCaps = (t, a = 1) => capsFrom(t, KIDS_CAPS, a);
+
+  function renderKids(t) {
+    capHook = (text) => KIDS_COPY[text] || true;
+    END_PILL_K = 40 / 48;
+    if (t < 1.8) {
+      BG(t, 0, t >= 1.4 && t < 1.4 + 2 / FPS);
+      STG(ST, () => scene1(t));
+    } else if (t < 4.6) {
+      BG(t);
+      STG(ST, () => scene2(t));
+    } else if (t < 4.87) {
+      slideSwap(t, 4.6, 4.87, () => scene2(t + 0.25), () => scene3(Math.max(t + 0.25, 5.0)));
+    } else if (t < 9.2) {
+      BG(t, -320);
+      STG(ST, () => scene3(t + 0.25));
+    } else if (t < 9.55) {
+      const u = t + 0.25;
+      const k = E.inCubic(seg(u, 9.45, 9.8));
+      // 하트가 열리는 동안 두 제목이 반반 섞여 읽히지 않게: 나가는 장면은 자막을 끄고, 들어오는 자막은 거의 다 열렸을 때만
+      const mute = (fn) => () => {
+        const h = capHook;
+        capHook = () => false;
+        try {
+          fn();
+        } finally {
+          capHook = h;
+        }
+      };
+      const inFn = () => scene4(Math.max(u, 9.6));
+      heartIris(t, k, mute(() => scene3(u)), k >= 0.9 ? inFn : mute(inFn));
+    } else if (t < 11.0) {
+      BG(t);
+      STG(ST, () => scene4(t + 0.25));
+    } else if (t < 11.3) {
+      slideSwap(t, 11.0, 11.3, () => scene4(11.25), () => {
+        kidsVillage(11.3);
+        kidsCaps(11.3);
+      });
+    } else if (t < 17.3) {
+      BG(t, -320);
+      STG(ST, () => {
+        kidsVillage(t);
+        kidsCaps(t);
+      });
+    } else if (t < 17.6) {
+      BG(t, -320);
+      foldInto(t, 17.3, 17.6, ST, withKCam(17.3, () => vw2s(KONGI_TO.x, KONGI_TO.y)), () => kidsVillage(17.3), (a) => kidsCaps(17.3, a));
+    } else {
+      const tc = Math.min(t, CUTS.kids.hold);
+      BG(tc, -320);
+      endCard(tc + 1.0);
+    }
+  }
+
+  // ---------- 부모용 컷 (24.4초) ----------
+  // 게임 대화상자(.dialog.candy) 모양을 캔버스로 다시 그린다: 보라 그라데이션 + 분홍 테두리
+  const LILAC = "#cbb6ff";
+  const COTTON = "#ffeaf4";
+  function dialogBox(cx, cy, w, h) {
+    ctx.save();
+    ctx.strokeStyle = "rgba(255, 121, 199, 0.35)";
+    ctx.lineWidth = 5;
+    ctx.beginPath();
+    ctx.roundRect(cx - w / 2 - 14, cy - h / 2 - 14, w + 28, h + 28, 60);
+    ctx.stroke();
+    ctx.shadowColor = "rgba(255, 121, 199, 0.6)";
+    ctx.shadowBlur = 50;
+    const g = ctx.createLinearGradient(0, cy - h / 2, 0, cy + h / 2);
+    g.addColorStop(0, C.grape);
+    g.addColorStop(1, C.plum);
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.roundRect(cx - w / 2, cy - h / 2, w, h, 48);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.strokeStyle = C.pink;
+    ctx.lineWidth = 7;
+    ctx.stroke();
+    ctx.restore();
+  }
+  function dlgText(text, x, y, size, color, o = {}) {
+    ctx.save();
+    ctx.font = `${size}px 'Jua'`;
+    if (o.maxW) fitFont(text, size, o.maxW);
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    if (o.spacing) ctx.letterSpacing = `${o.spacing}px`;
+    if (o.shadow) {
+      ctx.fillStyle = o.shadow;
+      ctx.fillText(text, x, y + 6);
+    }
+    ctx.fillStyle = color;
+    ctx.fillText(text, x, y);
+    ctx.restore();
+  }
+  function lemonButton(x, y, w, h, label, o = {}) {
+    ctx.save();
+    ctx.translate(x, y + (o.press ? 6 : 0));
+    const s = o.scale == null ? 1 : o.scale;
+    ctx.scale(s, s);
+    if (o.picked) {
+      ctx.shadowColor = "#ffffff";
+      ctx.shadowBlur = 30;
+    }
+    ctx.fillStyle = "#c47a12";
+    ctx.beginPath();
+    ctx.roundRect(-w / 2, -h / 2 + (o.press ? 2 : 8), w, h, h / 2);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    const g = ctx.createLinearGradient(0, -h / 2, 0, h / 2);
+    g.addColorStop(0, "#ffe36a");
+    g.addColorStop(1, "#ffc44d");
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.roundRect(-w / 2, -h / 2, w, h, h / 2);
+    ctx.fill();
+    if (o.picked) {
+      ctx.strokeStyle = "#ffffff";
+      ctx.lineWidth = 6;
+      ctx.beginPath();
+      ctx.roundRect(-w / 2 - 7, -h / 2 - 7, w + 14, h + 14, h / 2 + 7);
+      ctx.stroke();
+    }
+    ctx.fillStyle = "rgba(255,255,255,0.45)";
+    ctx.beginPath();
+    ctx.roundRect(-w / 2 + h * 0.35, -h / 2 + 10, w - h * 0.7, h * 0.18, h * 0.09);
+    ctx.fill();
+    ctx.translate(0, 3);
+    const ls = o.labelScale || 1;
+    ctx.scale(ls, ls);
+    ctx.font = `${o.size || 60}px 'Jua'`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillStyle = "#3a1230";
+    ctx.fillText(label, 0, 0);
+    ctx.restore();
+  }
+  function ghostButton(x, y, w, h, label, o = {}) {
+    ctx.save();
+    ctx.translate(x, y);
+    if (o.glow > 0) {
+      ctx.save();
+      ctx.globalAlpha *= o.glow;
+      ctx.shadowColor = C.pink;
+      ctx.shadowBlur = 40;
+      ctx.strokeStyle = C.pink;
+      ctx.lineWidth = 10;
+      ctx.beginPath();
+      ctx.roundRect(-w / 2 - 6, -h / 2 - 6, w + 12, h + 12, h / 2 + 6);
+      ctx.stroke();
+      ctx.restore();
+    }
+    ctx.fillStyle = o.bg || "rgba(255, 234, 244, 0.1)";
+    ctx.strokeStyle = LILAC;
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.roundRect(-w / 2, -h / 2, w, h, h / 2);
+    ctx.fill();
+    ctx.stroke();
+    const icon = o.icon ? o.iconW || 56 : 0;
+    ctx.font = `${o.size || 44}px 'Jua'`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillStyle = COTTON;
+    ctx.fillText(label, icon / 2, 3);
+    if (o.icon) {
+      const tw = ctx.measureText(label).width;
+      o.icon(-tw / 2 - icon / 2 + 6, 0);
+    }
+    ctx.restore();
+  }
+  function checkMark(x, y, s, ck) {
+    if (ck <= 0) return;
+    const P = [pt(-24, 0), pt(-6, 20), pt(28, -22)];
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.scale(s, s);
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    for (const [lw, col] of [
+      [20, C.grape],
+      [11, C.mint],
+    ]) {
+      ctx.strokeStyle = col;
+      ctx.lineWidth = lw;
+      ctx.beginPath();
+      ctx.moveTo(P[0].x, P[0].y);
+      const k1 = clamp(ck / 0.4);
+      ctx.lineTo(lerp(P[0].x, P[1].x, k1), lerp(P[0].y, P[1].y, k1));
+      if (ck > 0.4) {
+        const k2 = clamp((ck - 0.4) / 0.6);
+        ctx.lineTo(lerp(P[1].x, P[2].x, k2), lerp(P[1].y, P[2].y, k2));
+      }
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+  function starStamp(x, y, t0, t, s = 1) {
+    if (t < t0) return;
+    const sq = squash(t - t0, 1.4);
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.scale(s * (1 + sq.squashX), s * (1 + sq.squashY));
+    ctx.fillStyle = C.lemon;
+    ctx.strokeStyle = "#c48a00";
+    ctx.lineWidth = 5;
+    Draw.star(ctx, 0, 0, 54, 5, 0.5);
+    ctx.fill();
+    ctx.stroke();
+    ctx.restore();
+    checkMark(x, y, s, E.outCubic(seg(t, t0 + 0.06, t0 + 0.24)));
+  }
+  function cameraGlyph(x, y) {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.fillStyle = COTTON;
+    ctx.beginPath();
+    ctx.roundRect(-24, -14, 48, 32, 8);
+    ctx.roundRect(-10, -21, 20, 10, 4);
+    ctx.fill();
+    ctx.fillStyle = C.grape;
+    ctx.beginPath();
+    ctx.arc(0, 2, 10, 0, TAU);
+    ctx.fill();
+    ctx.fillStyle = COTTON;
+    ctx.beginPath();
+    ctx.arc(0, 2, 5, 0, TAU);
+    ctx.fill();
+    ctx.restore();
+  }
+  function iconChat(x, y, k) {
+    ctx.save();
+    ctx.fillStyle = C.cream;
+    ctx.strokeStyle = C.grape;
+    ctx.lineWidth = 5;
+    ctx.beginPath();
+    ctx.roundRect(x - 62, y - 42, 124, 74, 30);
+    ctx.fill();
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(x - 30, y + 30);
+    ctx.lineTo(x - 44, y + 52);
+    ctx.lineTo(x - 8, y + 31);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = C.cream;
+    ctx.fillRect(x - 32, y + 24, 26, 9);
+    ctx.fillStyle = C.ink;
+    for (let i = -1; i <= 1; i++) {
+      ctx.beginPath();
+      ctx.arc(x + i * 26, y - 5, 8, 0, TAU);
+      ctx.fill();
+    }
+    ctx.restore();
+    crossLine(x - 70, y - 50, x + 66, y + 52, k);
+  }
+  function wifiTile(x, y) {
+    ctx.save();
+    ctx.fillStyle = "#d9fff3";
+    ctx.strokeStyle = C.grape;
+    ctx.lineWidth = 5;
+    ctx.beginPath();
+    ctx.roundRect(x - 62, y - 48, 124, 96, 22);
+    ctx.fill();
+    ctx.stroke();
+    ctx.restore();
+    wifiIcon(x, y - 6, 92);
+  }
+
+  // 방 그림 (콩이 쓰담 뒤, 곰돌이를 옮긴 자리)
+  const ROOM_AFTER = ROOM_BASE.map((p) => {
+    const q = Object.assign({}, p);
+    if (p.type === "mine") q.pets = p.pets + 3;
+    if (p.type === "bear") {
+      q.x = 132;
+      q.y = 256;
+    }
+    return q;
+  });
+  const PH = { x: 540, y: 975, w: 420, h: 500 }; // 콩이 사진 (폴라로이드)
+  function kongiPhoto(t) {
+    ctx.save();
+    ctx.translate(PH.x, PH.y);
+    ctx.rotate(-0.04);
+    ctx.shadowColor = "rgba(0,0,0,0.45)";
+    ctx.shadowBlur = 30;
+    ctx.fillStyle = "#fffaf2";
+    ctx.beginPath();
+    ctx.roundRect(-PH.w / 2, -PH.h / 2, PH.w, PH.h, 22);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    const g = ctx.createLinearGradient(0, -PH.h / 2 + 30, 0, 120);
+    g.addColorStop(0, "#ffd6ec");
+    g.addColorStop(1, "#ffeecf");
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.roundRect(-PH.w / 2 + 28, -PH.h / 2 + 28, PH.w - 56, PH.w - 56, 12);
+    ctx.fill();
+    ctx.save();
+    ctx.globalAlpha = 0.3;
+    for (let i = 0; i < 6; i++) Draw.felt(ctx, -150 + (i % 3) * 150, -180 + Math.floor(i / 3) * 250, 11, 10, ["#ffb3c7", "#ffe36a", "#7de3b0"][i % 3]);
+    ctx.restore();
+    ctx.translate(0, -PH.h / 2 + 28 + (PH.w - 56) / 2 + 14);
+    ctx.scale(3.4, 3.4);
+    Draw.plush(ctx, { type: "mine", spec: KONGI, x: 0, y: 0, radius: 44 / 1.7, blink: blinkAt(t, 0.7), react: "success" });
+    ctx.restore();
+    ctx.save();
+    ctx.translate(PH.x, PH.y);
+    ctx.rotate(-0.04);
+    ctx.font = "52px 'Jua'";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillStyle = C.grape;
+    ctx.fillText("콩이", 0, PH.h / 2 - 58);
+    ctx.restore();
+  }
+
+  // 공유 전 보호자 확인 (7 × 8 = ?, 보기 4개: 게임의 Fun.parentQuestion이 7×8에 만드는 보기)
+  const GATE = { cx: 540, cy: 1085, w: 780, h: 770 };
+  const GATE_CHOICES = [
+    ["63", 380, 1150],
+    ["56", 700, 1150],
+    ["48", 380, 1272],
+    ["57", 700, 1272],
+  ];
+  const GATE_TAP = 10.45;
+  const SHARE_Y = 1340;
+
+  function sceneGate(t) {
+    cardFrame(CARD, () => {
+      ctx.save();
+      ctx.translate(ROOM_R.x, ROOM_R.y);
+      ctx.scale(ROOM_Z, ROOM_Z);
+      Room.paint(ctx, ROOM_AFTER, { time: t, anim: {} });
+      ctx.restore();
+      ctx.fillStyle = "rgba(20, 8, 50, 0.45)";
+      ctx.fillRect(0, 0, W, H);
+      kongiPhoto(t);
+      // 방의 사진 찍기 버튼 (게임의 roomPhotoBtn) → 확인 뒤에는 민트 알약
+      const ba = 1 - seg(t, 11.05, 11.25);
+      if (ba > 0) {
+        ctx.save();
+        ctx.globalAlpha = ba;
+        ghostButton(540, SHARE_Y, 360, 96, "사진 찍기", {
+          size: 48,
+          bg: "rgba(53, 20, 80, 0.85)",
+          press: pressAt(t, [8.85]),
+          icon: (x, y) => cameraGlyph(x, y),
+          iconW: 64,
+        });
+        ctx.restore();
+      }
+      ripple(540, SHARE_Y, t - 8.85, C.mint, 160, 2);
+      const pk = OB(seg(t, 11.3, 11.55));
+      if (pk > 0) pill(540, SHARE_Y, "어른 확인 후에만 밖으로", { size: 50, bg: C.mint, color: C.ink, scale: pk, pad: 44 });
+      // 사진에 확인 도장
+      starStamp(PH.x + 170, PH.y - 215, 11.1, t, 0.9);
+      // 어두운 막 + 대화상자
+      const sa = seg(t, 9.0, 9.3) * (1 - seg(t, 10.95, 11.3));
+      if (sa > 0) {
+        ctx.fillStyle = `rgba(20, 8, 50, ${0.55 * sa})`;
+        ctx.fillRect(0, 0, W, H);
+      }
+      const dk = OB(seg(t, 9.0, 9.3));
+      const out = seg(t, 10.9, 11.3);
+      const ds = dk * (1 - E.inBack(out));
+      if (ds > 0.01 && t < 11.3) {
+        ctx.save();
+        const ox = lerp(GATE.cx, PH.x, E.inCubic(out));
+        const oy = lerp(GATE.cy, PH.y, E.inCubic(out));
+        ctx.translate(ox, oy);
+        ctx.scale(ds, ds);
+        ctx.translate(-GATE.cx, -GATE.cy);
+        ctx.globalAlpha = 1 - seg(out, 0.7, 1);
+        gateDialog(t);
+        ctx.restore();
+      }
+    });
+    // 아이 손가락: 사진 찍기 톡
+    const fk = seg(t, 8.38, 8.45) * (1 - seg(t, 9.0, 9.2));
+    if (fk > 0) {
+      const p = kf(t, [
+        [8.38, 200, 1800],
+        [8.78, 552, SHARE_Y + 8],
+        [8.95, 552, SHARE_Y + 8],
+        [9.2, 260, 1820],
+      ]);
+      finger(p.x, p.y, pressAt(t, [8.85]), fk);
+    }
+    // 어른 손가락 (더 크고 오른쪽 아래에서)
+    const ak = seg(t, 9.6, 9.7) * (1 - seg(t, 10.65, 10.9));
+    if (ak > 0) {
+      const p = kf(t, [
+        [9.6, 1120, 1900],
+        [10.36, 772, 1182],
+        [10.6, 772, 1182],
+        [10.9, 1140, 1900],
+      ]);
+      ctx.save();
+      ctx.translate(p.x, p.y);
+      ctx.scale(1.22, 1.22);
+      finger(0, 0, pressAt(t, [GATE_TAP]), ak, -0.2);
+      ctx.restore();
+    }
+  }
+
+  function gateDialog(t) {
+    const G = GATE;
+    dialogBox(G.cx, G.cy, G.w, G.h);
+    const top = G.cy - G.h / 2;
+    dlgText("보호자 확인", G.cx, top + 66, 46, LILAC, { spacing: 6 });
+    dlgText("7 × 8 = ?", G.cx, top + 170, 124, COTTON, { shadow: "#7a2d6a" });
+    dlgText("밖으로 보내기 전에", G.cx, top + 272, 46, COTTON);
+    dlgText("어른이 풀어 주세요.", G.cx, top + 326, 46, COTTON);
+    for (const [label, x, y] of GATE_CHOICES) {
+      const picked = label === "56" && t >= GATE_TAP;
+      lemonButton(x, y, 290, 100, label, {
+        size: 66,
+        picked,
+        press: label === "56" && pressAt(t, [GATE_TAP]),
+        labelScale: picked ? 1 + 0.4 * spring(t - GATE_TAP) : 1,
+      });
+      if (picked) {
+        checkMark(x + 104, y - 4, 1, E.outCubic(seg(t, GATE_TAP + 0.05, GATE_TAP + 0.25)));
+        sparkRing(x, y, t - GATE_TAP - 0.05, 150, 16);
+      }
+    }
+    ghostButton(G.cx, top + G.h - 72, 240, 80, "취소", { size: 44 });
+  }
+
+  // 하루 놀이 시간 (Save.LIMITS: 끔·15·20·30·45·60분, 기본 30분)
+  const TIME = { cx: 540, cy: 1085, w: 820, h: 860 };
+  const TIME_OPTS = ["끔", "15분", "20분", "30분", "45분", "60분"];
+  const CLOCK_AT = pt(540, TIME.cy - TIME.h / 2 + 92);
+  function settingsCard(t, dialogScale = 1, dialogAlpha = 1) {
+    cardFrame(CARD, () => {
+      ctx.fillStyle = "#2a1148";
+      ctx.fillRect(CARD.x, CARD.y, CARD.w, CARD.h);
+      ctx.save();
+      ctx.globalAlpha = 0.12;
+      const cols = ["#ffb3c7", "#ffe36a", "#7de3b0", "#d7c2ff"];
+      let n = 0;
+      for (let y = CARD.y + 40; y < CARD.y + CARD.h; y += 92) {
+        for (let x = CARD.x + 40 + ((y / 92) % 2 ? 46 : 0); x < CARD.x + CARD.w; x += 92) Draw.felt(ctx, x, y, 11, 10, cols[n++ % 4]);
+      }
+      ctx.restore();
+      if (dialogScale > 0.01 && dialogAlpha > 0) {
+        ctx.save();
+        ctx.globalAlpha = dialogAlpha;
+        ctx.translate(CLOCK_AT.x, CLOCK_AT.y);
+        ctx.scale(dialogScale, dialogScale);
+        ctx.translate(-CLOCK_AT.x, -CLOCK_AT.y);
+        timeDialog(t);
+        ctx.restore();
+      }
+    });
+  }
+  // 버튼 모양 그대로 퍼지는 빛 (둥근 원이 옆 버튼을 가로지르지 않게)
+  function pillGlow(x, y, w, h, dt, color) {
+    if (dt < 0 || dt > 0.8) return;
+    ctx.save();
+    for (let i = 0; i < 2; i++) {
+      const k = seg(dt, i * 0.12, 0.5 + i * 0.12);
+      if (k <= 0 || k >= 1) continue;
+      const g = 12 + 10 * E.outCubic(k);
+      ctx.globalAlpha = 1 - k;
+      ctx.strokeStyle = color;
+      ctx.shadowColor = color;
+      ctx.shadowBlur = 16;
+      ctx.lineWidth = 9 * (1 - k) + 3;
+      ctx.beginPath();
+      ctx.roundRect(x - w / 2 - g, y - h / 2 - g, w + 2 * g, h + 2 * g, h / 2 + g);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+  function timeDialog(t) {
+    const D = TIME;
+    const top = D.cy - D.h / 2;
+    dialogBox(D.cx, D.cy, D.w, D.h);
+    iconClock(CLOCK_AT.x, CLOCK_AT.y, 0.7 * E.inOutCubic(seg(t, 12.6, 13.6)));
+    dlgText("보호자 설정", D.cx, top + 186, 44, LILAC, { spacing: 6 });
+    dlgText("하루 놀이 시간", D.cx, top + 268, 96, COTTON, { shadow: "#7a2d6a" });
+    dlgText("아이 모드에서 정한 시간이 지나면", D.cx, top + 360, 42, COTTON, { maxW: 720 });
+    dlgText("쉬는 시간을 알려 줘요.", D.cx, top + 410, 42, COTTON);
+    TIME_OPTS.forEach((label, i) => {
+      const x = D.cx + (i % 2 ? 160 : -160);
+      const y = top + 520 + Math.floor(i / 2) * 112;
+      lemonButton(x, y, 290, 90, label, { size: 56, picked: label === "30분" });
+      if (label === "30분") pillGlow(x, y, 290, 90, t - 13.0, C.mint);
+    });
+  }
+
+  // 뽑기 기계 (조용한 순간) — 장면 2와 같은 화면
+  const CALM_LIST = BASE.filter((p) => p.type !== "puppy");
+  function calmMachine(t, dim) {
+    cardFrame(CARD, () => {
+      ctx.save();
+      camTransform(Z2.x, Z2.y, Z2.z);
+      drawMachine(
+        CALM_LIST.map((p) => plushAt(p, t)),
+        { x: HOME.x + 40 * Math.sin(t * 0.8), y: HOME.y, z: 0, open: 1 },
+      );
+      ctx.restore();
+      if (dim > 0) {
+        ctx.fillStyle = `rgba(20, 8, 50, ${dim})`;
+        ctx.fillRect(0, 0, W, H);
+      }
+    });
+  }
+
+  function warnToast(t) {
+    const s = seg(t, 14.35, 14.6);
+    if (s <= 0) return;
+    const k = E.outBack(s);
+    // 카드 안에서 살짝 내려오며 나타난다 (자막 줄과 카드 윗변을 넘지 않는다)
+    const y = lerp(590, 640, k) + Math.sin((t - 14.6) * 3) * 6 * seg(t, 14.6, 14.8);
+    ctx.save();
+    ctx.globalAlpha *= seg(t, 14.35, 14.47);
+    pill(540, y, "2분 뒤에 쉬는 시간이에요", {
+      scale: 0.85 + 0.15 * Math.min(k, 1.05),
+      size: 50,
+      bg: C.lemon,
+      color: "#3a1230",
+      pad: 40,
+      stroke: "#c47a12",
+      icon: (x, yy) => {
+        ctx.save();
+        ctx.translate(x, yy);
+        ctx.scale(0.55, 0.55);
+        iconClock(0, 0, 0.7);
+        ctx.restore();
+      },
+    });
+    ctx.restore();
+  }
+
+  const BREAK = { cx: 540, cy: 1060, w: 800, h: 830 };
+  function breakDialog(t) {
+    const D = BREAK;
+    const top = D.cy - D.h / 2;
+    dialogBox(D.cx, D.cy, D.w, D.h);
+    dlgText("쉬는 시간", D.cx, top + 64, 44, LILAC, { spacing: 6 });
+    iconClock(D.cx, top + 152, 1);
+    dlgText("오늘은 여기까지!", D.cx, top + 260, 100, COTTON, { shadow: "#7a2d6a", maxW: 700 });
+    dlgText("오늘 30분 동안 놀았어요.", D.cx, top + 352, 42, COTTON);
+    dlgText("인형들도 코— 잘 시간이에요.", D.cx, top + 402, 42, COTTON);
+    dlgText("내일 또 만나요", D.cx, top + 452, 42, COTTON);
+    lemonButton(D.cx, top + 565, 600, 100, "알겠어요", { size: 58 });
+    const glow = t >= 16.4 ? Math.sin(seg(t, 16.4, 17.2) * Math.PI) : 0;
+    const lb = 1 + 0.3 * spring(t - 16.4);
+    ghostButton(D.cx, top + 690, 600, 92, "어른과 10분 더", {
+      size: 50,
+      glow,
+      iconW: 70,
+      icon: (x, y) => {
+        ctx.save();
+        ctx.translate(x, y);
+        ctx.scale(0.5 * (t >= 16.4 ? lb : 1), 0.5 * (t >= 16.4 ? lb : 1));
+        iconLock(0, -12);
+        ctx.restore();
+      },
+    });
+  }
+  function breakScene(t) {
+    calmMachine(t, 0.12 + 0.5 * seg(t, 15.35, 15.6));
+    cardFrame(
+      CARD,
+      () => {
+        const k = OB(seg(t, 15.35, 15.6));
+        if (k <= 0) return;
+        ctx.save();
+        ctx.translate(BREAK.cx, BREAK.cy);
+        ctx.scale(k, k);
+        ctx.translate(-BREAK.cx, -BREAK.cy);
+        breakDialog(t);
+        ctx.restore();
+        // 졸린 인형들이 대화상자 아래에서 빼꼼
+        const pa = seg(t, 15.6, 15.9);
+        [
+          ["bear", 300, 0.2],
+          ["bunny", 780, 1.4],
+        ].forEach(([type, x, ph]) => {
+          const bob = Math.sin(t * 2 + ph) * 6;
+          ctx.save();
+          ctx.translate(x, BREAK.cy + BREAK.h / 2 + 60 + (1 - pa) * 120 + bob);
+          ctx.scale(2.6, 2.6);
+          Draw.plush(ctx, { type, x: 0, y: 0, radius: 24, blink: 0.1, react: "idle", angle: Math.sin(t * 1.3 + ph) * 0.06 });
+          ctx.restore();
+        });
+      },
+      { bg: "rgba(0,0,0,0)", border: "rgba(0,0,0,0)" },
+    );
+  }
+
+  // 부모님 체크 (부모용 표: 광고·결제 / 개인정보 / 인터넷 없이 / 채팅 없음)
+  const PARENT_CL = {
+    rowT: [17.85, 18.4, 18.95, 19.5],
+    txt: ["광고·결제 없음", "개인정보 수집 없음", "인터넷 없이도 OK", "낯선 사람과 채팅 없음"],
+    plush: ["bear", "bunny", "chick", "penguin"],
+    icon(i, x, y, t, ts) {
+      const k = seg(t, ts, ts + 0.2);
+      if (i === 0) iconAd(x, y, k);
+      else if (i === 1) iconLock(x, y);
+      else if (i === 2) wifiTile(x, y);
+      else iconChat(x, y, k);
+    },
+  };
+  const P_PILL_T = 20.0;
+  const P_FOLD = [20.8, 21.0];
+  function parentsChecklist(t) {
+    CL = PARENT_CL;
+    checklist(t);
+    CL = null;
+    const pk = OB(seg(t, P_PILL_T, P_PILL_T + 0.25));
+    if (pk > 0) pill(540, 1392, "기록은 이 기기에만 저장돼요", { size: 48, bg: C.mint, color: C.ink, scale: pk, pad: 44 });
+  }
+
+  function kidModePill(t) {
+    const k = popIn(t, 0.25, 0.3);
+    if (k > 0) pill(CARD.x + CARD.w - 150, CARD.y + 62, "아이 모드", { size: 40, bg: C.mint, color: C.ink, scale: k, pad: 30 });
+  }
+
+  const P_KID_CAPS = [
+    { at: 0, end: 3.0, text: "아이 모드 기본 켜짐", noPop: true },
+    { at: 0.3, end: 1.65, text: "한 번 톡! 쉬운 뽑기", sub: true },
+    { at: 1.7, end: 3.0, text: "두 번 놓치면 집게가 도와줘요", sub: true },
+    { at: 3.1, end: 7.9, text: "아이는 이렇게 놀아요" },
+    { at: 3.3, end: 4.6, text: "내 인형 만들기 · 동물 20가지", sub: true },
+    { at: 4.75, end: 6.17, text: "쓰담쓰담 · 하트 뿅!", sub: true },
+    { at: 6.5, end: 7.9, text: "몰랑 마을 친구와 인사", sub: true },
+  ];
+  const P_GATE_CAPS = [
+    { at: 8.3, end: 12.35, text: "공유는 어른 확인 후" },
+    { at: 8.6, end: 10.3, text: "한 자리 곱셈 문제 · 보기 4개", sub: true },
+    { at: 10.3, end: 12.35, text: "틀리면 15초 동안 잠겨요", sub: true },
+    { at: 12.4, end: 15.4, text: "하루 놀이 시간 설정" },
+    { at: 12.6, end: 14.1, text: "기본 30분 · 끔부터 60분까지", sub: true },
+    { at: 14.15, end: 15.35, text: "끝나기 2분 전에 미리 알려요", sub: true },
+    { at: 15.4, end: 17.35, text: "시간이 되면 쉬는 시간" },
+    { at: 16.1, end: 17.35, text: "더 놀려면 어른 확인", sub: true },
+  ];
+  const P_CHECK_CAPS = [
+    { at: 17.4, end: 99, text: "부모님도 안심", size: 116 },
+    { at: 19.0, end: 99, text: "대화는 미리 쓴 문장만 · AI 없음", sub: true },
+  ];
+  function parentsCaps(t, a = 1) {
+    if (t < 8.0) STG(ST, () => capsFrom(t, P_KID_CAPS, a));
+    else if (t < 17.4) STG(ST, () => capsFrom(t, P_GATE_CAPS, a));
+    else STG(ST6, () => capsFrom(t, P_CHECK_CAPS, a, { head: 300, sub: 414 }));
+  }
+
+  const P_VIL = (t) => lerp(12.05, 12.98, seg(t, 6.62, 7.9)); // 마을: 고양이 인사가 끝날 때까지만
+  const PP = -320; // 몽타주 뒤 배경 별 위치
+
+  function renderParents(t) {
+    capHook = () => false; // 장면 속 자막은 모두 끄고, 부모용 자막 표만 쓴다
+    if (t < 3.0) {
+      BG(t);
+      STG(ST, () => {
+        scene2(Math.max(t + 1.8, 1.97)); // 흰 빛이 걷힌 뒤부터 (첫 화면이 비지 않게)
+        kidModePill(t);
+      });
+    } else if (t < 3.27) {
+      slideSwap(t, 3.0, 3.27, () => {
+        scene2(4.8 + (t - 3.0));
+        kidModePill(t);
+      }, () => scene3(6.3), 0, -320, ST, ST, true);
+    } else if (t < 4.6) {
+      BG(t, -320);
+      STG(ST, () => scene3(6.3 + (t - 3.27)));
+    } else if (t < 4.87) {
+      slideSwap(t, 4.6, 4.87, () => scene3(7.63 + (t - 4.6)), () => scene4(t + 5.43), -320, PP - 320, ST, ST, true);
+    } else if (t < 6.17) {
+      BG(t, PP - 320);
+      STG(ST, () => scene4(t + 5.43));
+    } else if (t < 6.62) {
+      BG(t, PP - 320);
+      STG(ST, () => polaroid(t + 5.43));
+    } else if (t < 7.9) {
+      BG(t, PP - 320);
+      STG(ST, () => scene5(P_VIL(t)));
+    } else if (t < 8.35) {
+      BG(t, PP - 320);
+      const sink = E.inCubic(seg(t, 7.9, 8.25));
+      const dark = seg(t, 7.9, 8.1);
+      ctx.save();
+      ctx.translate(0, SINK_D() * sink);
+      STG(ST, () => scene5(12.98, dark));
+      ctx.restore();
+      const rise = OB(seg(t, 8.0, 8.35));
+      if (rise > 0) {
+        ctx.save();
+        ctx.translate(0, SINK_D() * (1 - rise));
+        STG(ST, () => sceneGate(8.35));
+        ctx.restore();
+      }
+    } else if (t < 12.35) {
+      BG(t, PP - 320);
+      STG(ST, () => sceneGate(t));
+    } else if (t < 12.6) {
+      BG(t, PP - 320);
+      const k = E.inCubic(seg(t, 12.35, 12.6));
+      ctx.save();
+      ctx.translate(0, -SINK_D() * k);
+      STG(ST, () => sceneGate(12.35));
+      ctx.restore();
+      const rise = OB(seg(t, 12.35, 12.6));
+      ctx.save();
+      ctx.translate(0, SINK_D() * (1 - rise));
+      STG(ST, () => settingsCard(t));
+      ctx.restore();
+    } else if (t < 14.1) {
+      BG(t, PP - 320);
+      STG(ST, () => settingsCard(t));
+    } else if (t < 15.35) {
+      BG(t, PP - 320);
+      STG(ST, () => {
+        calmMachine(t, 0.15);
+        const k = seg(t, 14.1, 14.35);
+        if (k < 1) {
+          ctx.save();
+          ctx.globalAlpha = 1 - E.inQuad(k);
+          settingsCard(14.1, 1 - E.inBack(k), 1);
+          ctx.restore();
+        }
+        warnToast(t);
+      });
+    } else if (t < 17.35) {
+      BG(t, PP - 320);
+      STG(ST, () => breakScene(t));
+    } else if (t < 17.75) {
+      BG(t, PP - 320);
+      // 쉬는 시간 카드는 목록이 올라오기 전에 어두워지며 먼저 빠진다
+      const sink = E.inQuad(seg(t, 17.35, 17.5));
+      const gone = seg(t, 17.36, 17.47);
+      if (gone < 1) {
+        ctx.save();
+        ctx.globalAlpha = 1 - gone;
+        ctx.translate(0, SINK_D() * sink);
+        STG(ST, () => breakScene(17.35));
+        ctx.restore();
+      }
+      const rise = OB(seg(t, 17.4, 17.75));
+      if (rise > 0) {
+        ctx.save();
+        ctx.translate(0, SINK_D() * (1 - rise));
+        STG(ST6, () => parentsChecklist(Math.max(t, 17.4)));
+        ctx.restore();
+      }
+    } else if (t < P_FOLD[0]) {
+      BG(t, PP - 320);
+      STG(ST6, () => parentsChecklist(t));
+    } else if (t < P_FOLD[1]) {
+      BG(t, PP - 320);
+      foldInto(t, P_FOLD[0], P_FOLD[1], ST6, CLIP_TOP, () => parentsChecklist(P_FOLD[0]), (a) => capsFrom(P_FOLD[0], P_CHECK_CAPS, a, { head: 300, sub: 414 }));
+      return;
+    } else {
+      const tc = Math.min(t, CUTS.parents.hold);
+      BG(tc, PP - 320);
+      endCard(tc - 2.4);
+      return;
+    }
+    // 자막은 카드와 따로 (밀리거나 가라앉지 않고 제자리에서 바뀐다)
+    const ka = t >= 7.75 && t < 8.0 ? 1 - seg(t, 7.75, 7.9) : 1;
+    parentsCaps(t, ka);
+  }
+
+  function renderCut(t) {
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.globalAlpha = 1;
+    ctx.globalCompositeOperation = "source-over";
+    ctx.shadowBlur = 0;
+    ctx.textAlign = "left";
+    BUBBLE_K = isL() ? 1.4 : 1;
+    try {
+      if (CUT === "short") renderShort(t);
+      else if (CUT === "kids") renderKids(t);
+      else renderParents(t);
+    } finally {
+      capHook = null;
+      BEAR_HOME = false;
+      END_PILL_K = 1;
+      CL = null;
+      capSink = null;
+    }
+  }
+
+  const CUT_TEXT = [
+    "톡! 눌러서 뽑기", "친구 12명 + 비밀 친구", "기계 속에 콩이가!", "숨바꼭질! 찾았다! 소풍 가자! 톡! 이리 와!", "어디 숨었지? 부스럭부스럭?",
+    "좋아하는 간식을 줘요 좋아하는 간식은 하트 2개! 콩이가 콩콩 따라와요 없네~", LOVE_LINE, "곰돌이",
+    "보호자 확인 7 × 8 = ? 밖으로 보내기 전에 어른이 풀어 주세요. 63 56 48 57 취소 사진 찍기 어른 확인 후에만 밖으로",
+    "보호자 설정 하루 놀이 시간 아이 모드에서 정한 시간이 지나면 쉬는 시간을 알려 줘요. 끔 15분 20분 30분 45분 60분",
+    "2분 뒤에 쉬는 시간이에요 쉬는 시간 오늘은 여기까지! 오늘 30분 동안 놀았어요. 인형들도 코— 잘 시간이에요. 내일 또 만나요 알겠어요 어른과 10분 더",
+    "광고·결제 없음 개인정보 수집 없음 인터넷 없이도 OK 낯선 사람과 채팅 없음 기록은 이 기기에만 저장돼요 아이 모드",
+  ]
+    .concat(P_KID_CAPS, P_GATE_CAPS, P_CHECK_CAPS, KIDS_CAPS).map((c) => (typeof c === "string" ? c : c.text))
+    .join(" ");
+
   // ---------- 소리 (OfflineAudioContext로 합성) ----------
   const SR = 44100;
   let audioBuffer = null;
 
-  async function renderAudio() {
+  async function renderAudio(cut) {
+    cut = cut || CUT;
+    if (cut !== "full") return renderCutAudio(cut);
     const len = Math.ceil(DUR * SR);
     const oc = new OfflineAudioContext(2, len, SR);
     const master = oc.createGain();
@@ -2935,6 +4454,357 @@
     return { base64: wavBase64(buf), peak, gain };
   }
 
+  // ---------- 컷별 소리: 기본 컷과 같은 악기·같은 120 BPM 곡을 컷의 시간표로 다시 합성 ----------
+  async function renderCutAudio(cut) {
+    const D = CUTS[cut].dur;
+    const oc = new OfflineAudioContext(2, Math.ceil(D * SR), SR);
+    const master = oc.createGain();
+    master.gain.value = 1;
+    master.connect(oc.destination);
+    const musicLP = oc.createBiquadFilter();
+    musicLP.type = "lowpass";
+    musicLP.frequency.value = 18000;
+    musicLP.Q.value = 0.5;
+    musicLP.connect(master);
+    const music = oc.createGain();
+    music.connect(musicLP);
+    const sfx = oc.createGain();
+    sfx.gain.value = 0.9;
+    sfx.connect(master);
+
+    const nr = mulberry32(SEED + 99);
+    const noiseBuf = oc.createBuffer(1, SR, SR);
+    const nd = noiseBuf.getChannelData(0);
+    for (let i = 0; i < nd.length; i++) nd[i] = nr() * 2 - 1;
+    const midi = (m) => 440 * Math.pow(2, (m - 69) / 12);
+
+    function tone(bus, at, freq, dur, o = {}) {
+      if (at == null || at < 0 || at >= D) return;
+      const osc = oc.createOscillator();
+      osc.type = o.type || "triangle";
+      osc.frequency.setValueAtTime(freq, at);
+      if (o.to) osc.frequency.exponentialRampToValueAtTime(o.to, at + (o.glide || dur));
+      const g = oc.createGain();
+      const v = o.vol || 0.2;
+      const atk = o.atk || 0.005;
+      g.gain.setValueAtTime(0.0001, at);
+      g.gain.linearRampToValueAtTime(v, at + atk);
+      g.gain.exponentialRampToValueAtTime(0.0001, at + dur);
+      let node = osc;
+      if (o.lp) {
+        const f = oc.createBiquadFilter();
+        f.type = "lowpass";
+        f.frequency.value = o.lp;
+        osc.connect(f);
+        node = f;
+      }
+      node.connect(g);
+      if (o.pan) {
+        const p = oc.createStereoPanner();
+        p.pan.value = o.pan;
+        g.connect(p);
+        p.connect(bus);
+      } else g.connect(bus);
+      osc.start(at);
+      osc.stop(at + dur + 0.05);
+    }
+    function noise(bus, at, dur, o = {}) {
+      if (at == null || at < 0 || at >= D) return;
+      const src = oc.createBufferSource();
+      src.buffer = noiseBuf;
+      src.loop = true;
+      const f = oc.createBiquadFilter();
+      f.type = o.type || "bandpass";
+      f.frequency.setValueAtTime(o.freq || 3000, at);
+      if (o.to) f.frequency.exponentialRampToValueAtTime(o.to, at + dur);
+      f.Q.value = o.q || 1;
+      const g = oc.createGain();
+      const v = o.vol || 0.1;
+      g.gain.setValueAtTime(0.0001, at);
+      g.gain.linearRampToValueAtTime(v, at + (o.atk || 0.005));
+      g.gain.exponentialRampToValueAtTime(0.0001, at + dur);
+      src.connect(f);
+      f.connect(g);
+      g.connect(bus);
+      src.start(at, (at * 7.31) % 0.9);
+      src.stop(at + dur + 0.05);
+    }
+
+    // --- 음악 ---
+    const beat = 0.5;
+    const prog = [
+      [48, [60, 64, 67]],
+      [45, [57, 60, 64]],
+      [41, [57, 60, 65]],
+      [43, [55, 59, 62]],
+    ];
+    const melody = [
+      [72, 76, 79, 76, 77, 76, 74, 72],
+      [69, 72, 76, 72, 74, 72, 71, 69],
+      [72, 74, 77, 81, 79, 77, 76, 74],
+      [71, 74, 79, 74, 76, 74, 72, 71],
+    ];
+    const M = {
+      short: { bars: 7, arpK: 1, arpLP: 2600, stop: 14.0 },
+      kids: { bars: 10, arpK: 1, arpLP: 2600, stop: 19.5 },
+      parents: { bars: 12, arpK: 0.7, arpLP: 1800, stop: 23.5 },
+    }[cut];
+    // 어느 마디·박에서 선율을 낼지 (컷마다 다르다)
+    function melodyOn(bar, e, at) {
+      if (bar < 1 || !(e % 2 === 0 || bar % 2 === 1)) return 0;
+      if (cut === "kids" && bar === 6 && e < 6) return 0; // 숨바꼭질: 살금살금 (찾았다!에서 다시)
+      if (cut === "parents" && at >= 8.3 && at < 21.0) return bar % 2 === 0 ? 0.6 : 0; // 대화상자 동안은 차분하게
+      return 1;
+    }
+    for (let bar = 0; bar < M.bars; bar++) {
+      const t0 = bar * 4 * beat;
+      const pi = cut === "parents" && bar >= 11 ? 0 : bar % 4; // 부모용은 마지막에 C로 끝맺는다
+      const [root, ch] = prog[pi];
+      for (let b = 0; b < 4; b++) {
+        const at = t0 + b * beat;
+        if (at >= M.stop) continue;
+        tone(music, at, midi(b % 2 ? root + 12 : root), 0.3, { type: "triangle", vol: 0.32 });
+        if (b % 2 === 0) tone(music, at, 140, 0.14, { type: "sine", to: 48, glide: 0.12, vol: 0.38 });
+        noise(music, at + beat / 2, 0.04, { type: "highpass", freq: 7000, vol: 0.07 });
+        if (b % 2 === 1) noise(music, at, 0.1, { type: "bandpass", freq: 1800, q: 0.8, vol: 0.12 });
+      }
+      for (let e = 0; e < 8; e++) {
+        const at = t0 + e * beat * 0.5;
+        if (at >= M.stop) continue;
+        tone(music, at, midi(ch[e % 3] + 12), 0.16, { type: "square", vol: 0.035 * M.arpK, lp: M.arpLP, pan: e % 2 ? 0.25 : -0.25 });
+        const mk = melodyOn(bar, e, at);
+        if (mk > 0) tone(music, at, midi(melody[pi][e]), 0.22, { type: "triangle", vol: 0.11 * mk });
+      }
+    }
+    const mg = music.gain;
+    mg.setValueAtTime(0.0001, 0);
+    if (cut === "short") {
+      mg.linearRampToValueAtTime(0.55, 0.05);
+      mg.setValueAtTime(0.55, 14.0);
+      mg.linearRampToValueAtTime(0.0001, 14.6);
+    } else if (cut === "kids") {
+      mg.linearRampToValueAtTime(0.55, 0.05);
+      mg.setValueAtTime(0.55, 19.3);
+      mg.linearRampToValueAtTime(0.0001, 19.95);
+    } else {
+      const base = 0.55 * 0.7;
+      mg.linearRampToValueAtTime(base, 0.05);
+      mg.setValueAtTime(base, 8.3);
+      mg.linearRampToValueAtTime(base * 0.55, 8.6);
+      mg.setValueAtTime(base * 0.55, 20.9);
+      mg.linearRampToValueAtTime(base * 1.1, 21.0);
+      mg.setValueAtTime(base * 1.1, 23.6);
+      mg.linearRampToValueAtTime(0.0001, 24.35);
+      // 쉬는 시간: 음악이 잠들 듯 먹먹해졌다가 체크 목록에서 다시 열린다
+      const f = musicLP.frequency;
+      f.setValueAtTime(18000, 15.4);
+      f.exponentialRampToValueAtTime(700, 16.0);
+      f.setValueAtTime(700, 17.35);
+      f.exponentialRampToValueAtTime(18000, 17.7);
+    }
+
+    // --- 효과음 (기본 컷과 같은 소리) ---
+    const whirr = (a, d) => tone(sfx, a, 110, d, { type: "sawtooth", to: 90, vol: 0.05, lp: 700, atk: 0.04 });
+    const squish = (a) => tone(sfx, a, 520, 0.12, { type: "triangle", to: 980, glide: 0.1, vol: 0.18 });
+    const pop = (a, f = 600, v = 0.14) => tone(sfx, a, f, 0.08, { type: "sine", to: f * 2, glide: 0.06, vol: v });
+    const tok = (a) => {
+      tone(sfx, a, 1250, 0.06, { type: "sine", vol: 0.22 });
+      noise(sfx, a, 0.03, { freq: 4000, vol: 0.08 });
+    };
+    const whoosh = (a, d = 0.25, v = 0.12) => noise(sfx, a, d, { freq: 600, to: 4000, q: 0.7, vol: v, atk: d * 0.6 });
+    const bell = (a, m, v = 0.12) => {
+      tone(sfx, a, midi(m), 0.6, { type: "sine", vol: v });
+      tone(sfx, a, midi(m) * 2.01, 0.3, { type: "sine", vol: v * 0.35 });
+    };
+    const xylo = (a, m) => {
+      tone(sfx, a, midi(m), 0.35, { type: "sine", vol: 0.2 });
+      tone(sfx, a, midi(m) * 4, 0.05, { type: "sine", vol: 0.05 });
+    };
+    const bloop = (a) => tone(sfx, a, 380, 0.18, { type: "sine", to: 820, glide: 0.12, vol: 0.2 });
+    const stamp = (a, m) => {
+      tone(sfx, a, 220, 0.12, { type: "sine", to: 110, glide: 0.1, vol: 0.28 });
+      bell(a + 0.03, m, 0.12);
+    };
+    const riser = (a, d = 0.25) => tone(sfx, a, 400, d, { type: "triangle", to: 1600, glide: d * 0.88, vol: 0.08 });
+    const hook = () => {
+      whirr(0, 0.36);
+      squish(0.47);
+      tone(sfx, 0.72, 760, 0.36, { type: "triangle", to: 170, glide: 0.32, vol: 0.2 });
+      tone(sfx, 0.9, 150, 0.14, { type: "sine", to: 60, glide: 0.12, vol: 0.25 });
+      whoosh(1.0, 0.2, 0.16);
+      [88, 91, 96, 100].forEach((m, i) => tone(sfx, 1.4 + i * 0.04, midi(m), 0.35, { type: "triangle", vol: 0.09 }));
+      [72, 76, 79, 84].forEach((m) => tone(sfx, 1.47, midi(m), 0.6, { type: "square", vol: 0.04, lp: 3200 }));
+      whoosh(1.66, 0.16, 0.1);
+    };
+    // 한 번 톡 뽑기: 원래 시간 + off
+    const grab = (off) => {
+      whirr(1.95 + off, 0.6);
+      tok(2.6 + off);
+      whirr(2.65 + off, 0.25);
+      squish(3.0 + off);
+      whirr(3.25 + off, 0.25);
+      [76, 79, 84].forEach((m, i) => bell(3.5 + off + i * 0.07, m, 0.09));
+    };
+    // 내 인형 만들기: 원래 시간 u → 컷 시간 map(u)
+    const maker = (map) => {
+      for (let k = 1; k <= 24; k++) tone(sfx, map(stepTime(k)), 1700, 0.025, { type: "square", vol: 0.03, lp: 4000 });
+      bell(map(6.3), 84, 0.1);
+      [
+        [6.4, 72],
+        [6.9, 76],
+        [7.3, 79],
+        [7.7, 84],
+        [8.3, 88],
+      ].forEach(([a, m]) => xylo(map(a), m));
+      pop(map(7.9), 700, 0.08);
+      pop(map(8.1), 760, 0.08);
+      [72, 76, 79].forEach((m) => tone(sfx, map(8.4), midi(m), 0.4, { type: "triangle", vol: 0.07 }));
+      tone(sfx, map(8.88), 300, 0.18, { type: "sine", to: 180, glide: 0.15, vol: 0.15 });
+      tone(sfx, map(9.05), 300, 0.3, { type: "triangle", to: 900, glide: 0.28, vol: 0.12 });
+      pop(map(9.35), 640, 0.16);
+      whoosh(map(9.48), 0.3, 0.08);
+    };
+    // 엔드 카드: 원래 18.6에 시작하는 소리를 컷 시간 at0에, 마지막 화음 길이 chordD
+    const ending = (at0, chordD) => {
+      const o = at0 - 18.6;
+      [91, 96, 100].forEach((m, i) => tone(sfx, 18.6 + o + i * 0.04, midi(m), 0.4, { type: "triangle", vol: 0.07 }));
+      for (let i = 0; i < 5; i++) tone(sfx, 18.76 + o + i * 0.1, 200, 0.1, { type: "sine", to: 90, glide: 0.08, vol: 0.15 });
+      [72, 76, 79].forEach((m, i) => bell(18.9 + o + i * 0.15, m + 12, 0.1));
+      for (let i = 0; i < 14; i++) tone(sfx, 19.4 + o + i * (0.6 / 14), 2400, 0.02, { type: "square", vol: 0.02, lp: 5000 });
+      [60, 64, 67, 72, 76, 79, 84].forEach((m) => tone(sfx, 20.2 + o, midi(m), chordD, { type: "triangle", vol: 0.06 }));
+      bell(20.2 + o, 96, 0.08);
+    };
+
+    if (cut === "short") {
+      hook();
+      grab(0);
+      whoosh(3.61, 0.26, 0.12);
+      maker((u) => unmap(u, SHORT_M3));
+      bloop(7.45);
+      bloop(7.7);
+      bloop(7.95);
+      whoosh(8.08, 0.18, 0.1);
+      const m5 = (u) => unmap(u, SHORT_M5);
+      tone(sfx, 8.3, 1500, 0.08, { type: "sine", to: 2600, glide: 0.07, vol: 0.1 });
+      tone(sfx, 8.35, 1700, 0.08, { type: "sine", to: 2900, glide: 0.07, vol: 0.1 });
+      bloop(m5(12.35));
+      tone(sfx, m5(13.17), 330, 0.1, { type: "sine", to: 250, glide: 0.08, vol: 0.1 });
+      tone(sfx, m5(13.36), 300, 0.1, { type: "sine", to: 220, glide: 0.08, vol: 0.1 });
+      noise(sfx, m5(13.5), 0.3, { freq: 2800, q: 0.6, vol: 0.12, atk: 0.05 });
+      tone(sfx, m5(13.75), 320, 0.22, { type: "triangle", to: 900, glide: 0.18, vol: 0.15 });
+      [72, 76, 79, 84].forEach((m, i) => xylo(m5(14.4 + i * 0.08), m));
+      tone(sfx, m5(14.95), 500, 0.3, { type: "triangle", to: 900, glide: 0.2, vol: 0.08 });
+      bloop(m5(15.15));
+      bloop(m5(15.27));
+      tok(m5(15.0));
+      for (let i = 0; i < 6; i++) tone(sfx, m5(15.08 + i * 0.1), 900 + (i % 2) * 120, 0.05, { type: "square", vol: 0.04, lp: 3000 });
+      whoosh(11.5, 0.35, 0.12);
+      riser(11.8, 0.2);
+      ending(12.0, 1.0);
+    } else if (cut === "kids") {
+      hook();
+      grab(0);
+      for (let i = 0; i < 13; i++) if (3.78 + 0.08 * i < 4.6) pop(3.78 + 0.08 * i, 520 + i * 35, 0.1);
+      [96, 100, 103].forEach((m, i) => tone(sfx, 4.55 + i * 0.05, midi(m), 0.3, { type: "sine", vol: 0.06 }));
+      whoosh(4.61, 0.26, 0.12);
+      maker((u) => u - 0.25);
+      bloop(9.8);
+      bloop(10.05);
+      bloop(10.3);
+      pop(10.57, 420, 0.1);
+      pop(10.97, 300, 0.12);
+      whoosh(11.02, 0.25, 0.12);
+      // 숨바꼭질
+      noise(sfx, 11.7, 0.3, { freq: 2800, q: 0.6, vol: 0.1, atk: 0.05 });
+      pop(11.8, 500, 0.1);
+      tok(12.35);
+      tone(sfx, 12.38, 330, 0.1, { type: "sine", to: 250, glide: 0.08, vol: 0.1 });
+      tok(12.75);
+      tone(sfx, 12.78, 300, 0.1, { type: "sine", to: 220, glide: 0.08, vol: 0.1 });
+      noise(sfx, 12.85, 0.28, { freq: 2800, q: 0.6, vol: 0.12, atk: 0.05 });
+      noise(sfx, 13.15, 0.28, { freq: 3100, q: 0.6, vol: 0.12, atk: 0.05 });
+      tok(13.45);
+      tone(sfx, 13.5, 320, 0.22, { type: "triangle", to: 900, glide: 0.18, vol: 0.15 });
+      [72, 76, 79, 84].forEach((m, i) => xylo(13.55 + i * 0.08, m));
+      // 소풍
+      [72, 76, 79, 84].forEach((m, i) => xylo(14.2 + i * 0.08, m));
+      whoosh(14.8, 0.2, 0.08);
+      tok(15.3);
+      tone(sfx, 15.36, 500, 0.3, { type: "triangle", to: 900, glide: 0.2, vol: 0.08 });
+      bloop(15.7);
+      bloop(15.82);
+      bell(15.72, 84, 0.1);
+      // 톡! 이리 와
+      tok(16.55);
+      for (let i = 0; i < 6; i++) tone(sfx, 16.62 + i * 0.09, 900 + (i % 2) * 120, 0.05, { type: "square", vol: 0.04, lp: 3000 });
+      pop(17.15, 640, 0.12);
+      riser(17.3);
+      ending(17.6, 0.75); // 정지 구간 안에서 잦아들어 반복 재생이 매끄럽게
+    } else {
+      // 아이 모드: 장면 2 소리를 -1.8초 당겨서
+      grab(-1.8);
+      for (let i = 0; i < 13; i++) pop(1.98 + 0.08 * i, 520 + i * 35, 0.1);
+      [96, 100, 103].forEach((m, i) => tone(sfx, 3.0 + i * 0.05, midi(m), 0.3, { type: "sine", vol: 0.06 }));
+      pop(0.25, 700, 0.07);
+      whoosh(3.0, 0.26, 0.12);
+      xylo(3.37, 72);
+      xylo(3.87, 76);
+      xylo(4.27, 79);
+      whoosh(4.6, 0.26, 0.12);
+      bloop(4.87);
+      bloop(5.12);
+      pop(10.82 - 5.43, 420, 0.1);
+      pop(11.22 - 5.43, 300, 0.12);
+      whoosh(11.72 - 5.43, 0.18, 0.1);
+      tok(11.9 - 5.43);
+      tone(sfx, 12.0 - 5.43, 1500, 0.08, { type: "sine", to: 2600, glide: 0.07, vol: 0.1 });
+      tone(sfx, 12.1 - 5.43, 1700, 0.08, { type: "sine", to: 2900, glide: 0.07, vol: 0.1 });
+      bloop(6.62 + (12.35 - 12.05) * ((7.9 - 6.62) / (12.98 - 12.05)));
+      // 부모 구간
+      noise(sfx, 7.9, 0.4, { freq: 3000, to: 500, q: 0.7, vol: 0.09, atk: 0.12 });
+      bell(8.3, 79, 0.1);
+      bell(8.55, 72, 0.1);
+      tok(8.85);
+      tone(sfx, 9.0, 500, 0.12, { type: "square", to: 1000, glide: 0.1, vol: 0.035, lp: 3000 });
+      tok(GATE_TAP);
+      bell(GATE_TAP + 0.02, 84, 0.12);
+      bell(GATE_TAP + 0.15, 88, 0.12);
+      [96, 100, 103].forEach((m, i) => tone(sfx, GATE_TAP + 0.08 + i * 0.04, midi(m), 0.3, { type: "sine", vol: 0.05 }));
+      stamp(11.1, 84);
+      pop(11.3, 700, 0.08);
+      whoosh(12.35, 0.25, 0.1);
+      for (let i = 0; i < 4; i++) tone(sfx, 12.6 + i * 0.25, i % 2 ? 1600 : 2000, 0.02, { type: "square", vol: 0.02, lp: 5000 });
+      bell(13.0, 88, 0.08);
+      whoosh(14.1, 0.2, 0.07);
+      tone(sfx, 14.35, 660, 0.15, { type: "sine", vol: 0.14 });
+      tone(sfx, 14.47, 880, 0.22, { type: "sine", vol: 0.14 });
+      [79, 76, 72].forEach((m, i) => tone(sfx, 15.4 + i * 0.22, midi(m), 0.55, { type: "triangle", vol: 0.12 }));
+      noise(sfx, 16.4, 0.03, { type: "highpass", freq: 3000, vol: 0.15 });
+      tone(sfx, 16.4, 1800, 0.03, { type: "square", vol: 0.04 });
+      whoosh(17.35, 0.35, 0.12);
+      [72, 74, 76, 79].forEach((m, i) => stamp(PARENT_CL.rowT[i], m + 12));
+      bell(P_PILL_T, 93, 0.1);
+      riser(P_FOLD[0]);
+      ending(21.0, 1.6);
+    }
+
+    const buf = await oc.startRendering();
+    let peak = 0;
+    for (let c = 0; c < buf.numberOfChannels; c++) {
+      const d = buf.getChannelData(c);
+      for (let i = 0; i < d.length; i++) peak = Math.max(peak, Math.abs(d[i]));
+    }
+    const gain = peak > 0 ? 1 / peak : 1;
+    const DRIVE = 3.0;
+    const norm = 0.5 / Math.tanh(DRIVE);
+    for (let c = 0; c < buf.numberOfChannels; c++) {
+      const d = buf.getChannelData(c);
+      for (let i = 0; i < d.length; i++) d[i] = Math.tanh(DRIVE * gain * d[i]) * norm;
+    }
+    audioBuffer = buf;
+    return { base64: wavBase64(buf), peak, gain };
+  }
+
   function wavBase64(buf) {
     const ch = buf.numberOfChannels;
     const n = buf.length;
@@ -2976,7 +4846,7 @@
   const ALL_TEXT = [
     "아깝다…!", "쏙! 잡았다!", "한 번 톡! 쉬운 뽑기", "인형 12종 + 비밀 친구", "내 인형 만들기", "동물 20가지",
     "리본·모자·꽃·왕관", "기계 속에 내 인형이!", "콩이", "쓰담쓰담 하트 뿅!", "+1", "+2", "몰랑 마을", "톡! 말 걸기",
-    "숨바꼭질", "소풍 가자!", "부모님도 안심", "부모님 체크", "인터넷 없이도 OK", "7 × 8 = ?56", TITLE,
+    "숨바꼭질", "소풍 가자!", "부스럭!", "사진 찍기", "부모님도 안심", "부모님 체크", "인터넷 없이도 OK", "7 × 8 = ?56", TITLE,
     "뽑고, 모으고, 함께 놀아요", "광고 없음 · 개인정보 수집 없음", CAT_LINE, "✕",
   ]
     .concat(ROW_TXT)
@@ -2988,6 +4858,7 @@
   async function ready() {
     const loads = [];
     for (const fam of ["Jua", "Gowun Dodum"]) loads.push(document.fonts.load(`40px '${fam}'`, ALL_TEXT));
+    for (const fam of ["Jua"]) loads.push(document.fonts.load(`40px '${fam}'`, CUT_TEXT));
     await Promise.all(loads);
     await document.fonts.ready;
     silhouette = makeSilhouette();
@@ -3004,6 +4875,13 @@
     return FORMATS[f];
   }
 
+  function setCut(c) {
+    if (!CUTS[c]) throw new Error(`unknown cut: ${c}`);
+    if (c !== CUT) audioBuffer = null;
+    CUT = c;
+    return CUTS[c];
+  }
+
   const readyP = ready();
   window.PROMO = {
     get width() {
@@ -3017,10 +4895,21 @@
     },
     formats: Object.keys(FORMATS),
     setFormat,
+    get cut() {
+      return CUT;
+    },
+    cuts: Object.keys(CUTS),
+    setCut,
     fps: FPS,
-    duration: DUR,
-    holdT: HOLD_T,
-    frames: Math.round(DUR * FPS),
+    get duration() {
+      return CUTS[CUT].dur;
+    },
+    get holdT() {
+      return CUTS[CUT].hold;
+    },
+    get frames() {
+      return Math.round(CUTS[CUT].dur * FPS);
+    },
     ready: () => readyP,
     renderFrame,
     renderAudio,
@@ -3029,6 +4918,11 @@
   // ---------- 보통으로 열면 반복 재생 ----------
   const params = new URLSearchParams(location.search);
   if (params.get("format")) setFormat(params.get("format"));
+  const qCut = params.get("cut");
+  if (qCut) {
+    if (CUTS[qCut]) setCut(qCut);
+    else console.warn(`unknown cut "${qCut}" — playing the full cut (short | kids | parents)`);
+  }
   if (params.has("render")) {
     document.body.classList.add("render");
     return;
@@ -3062,7 +4956,8 @@
   });
   readyP.then(() => {
     const loop = () => {
-      const t = (((realNow() - start) / 1000) % DUR + DUR) % DUR;
+      const D = CUTS[CUT].dur;
+      const t = (((realNow() - start) / 1000) % D + D) % D;
       renderFrame(t);
       requestAnimationFrame(loop);
     };

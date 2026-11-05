@@ -6,4 +6,5 @@ out/*
 !out/poster.png
 !out/molang-promo-landscape-720.mp4
 !out/poster-landscape.png
+# 편집본(컷) 영상과 포스터는 저장소에 넣지 않는다: CUT=short|kids|parents [FORMAT=landscape] node tools/render-promo.mjs
 frames/

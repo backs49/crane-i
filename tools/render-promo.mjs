@@ -7,6 +7,11 @@
 //   또는 node tools/render-promo.mjs landscape (--format=landscape 도 된다)
 //   → molang-promo-landscape.mp4, molang-promo-landscape-720.mp4(1280x720), poster-landscape.png
 //   소리는 세로형 molang-promo-720.mp4의 AAC를 그대로 복사한다 (없으면 molang-promo.wav, 그것도 없으면 새로 만든다).
+// 편집본(컷): CUT=short|kids|parents (또는 인자 short / --cut=short), FORMAT과 함께 쓸 수 있다
+//   CUT=kids node tools/render-promo.mjs                  → molang-promo-kids.mp4 (1080x1920), poster-kids.png
+//   CUT=kids FORMAT=landscape node tools/render-promo.mjs → molang-promo-kids-landscape.mp4 (1920x1080), poster-kids-landscape.png
+//   컷의 소리는 그 컷의 시간표로 새로 합성한다 (가로형은 세로형 컷 MP4의 AAC를 복사, 없으면 molang-promo-<cut>.wav).
+//   CUT 없이 실행하면 예전과 똑같이 기본 22초 영상과 같은 파일 이름을 만든다.
 import { spawn } from "node:child_process";
 import { mkdirSync, writeFileSync, statSync, unlinkSync, existsSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -24,7 +29,10 @@ const argFormat = process.argv.slice(2).map((a) => a.replace(/^--format=/, "")).
 const FORMAT = (argFormat || process.env.FORMAT || "vertical").toLowerCase();
 if (!["vertical", "landscape"].includes(FORMAT)) throw new Error(`FORMAT must be vertical or landscape, got ${FORMAT}`);
 const LAND = FORMAT === "landscape";
-const SUFFIX = LAND ? "-landscape" : "";
+const argCut = process.argv.slice(2).map((a) => a.replace(/^--cut=/, "")).find((a) => /^(short|kids|parents)$/.test(a));
+const CUT = (argCut || process.env.CUT || "").toLowerCase();
+if (CUT && !["short", "kids", "parents"].includes(CUT)) throw new Error(`CUT must be short, kids or parents, got ${CUT}`);
+const SUFFIX = (CUT ? `-${CUT}` : "") + (LAND ? "-landscape" : "");
 
 function run(args, { input } = {}) {
   return new Promise((resolve, reject) => {
@@ -50,38 +58,38 @@ page.on("pageerror", (e) => console.error("[page error]", e.message));
 page.on("console", (m) => {
   if (m.type() === "error" || m.type() === "warning") console.error("[page]", m.text());
 });
-await page.goto(`${BASE}promo/index.html?render${LAND ? "&format=landscape" : ""}`, { waitUntil: "load" });
+await page.goto(`${BASE}promo/index.html?render${LAND ? "&format=landscape" : ""}${CUT ? `&cut=${CUT}` : ""}`, { waitUntil: "load" });
 await page.waitForFunction(() => window.PROMO && typeof window.PROMO.renderFrame === "function");
 await page.evaluate(async () => {
   await window.PROMO.ready();
   await document.fonts.ready;
 });
-const info = await page.evaluate(() => ({ w: PROMO.width, h: PROMO.height, fps: PROMO.fps, dur: PROMO.duration, frames: PROMO.frames }));
-console.log(`promo ${info.w}x${info.h} @${info.fps}fps, ${info.dur}s (${info.frames} frames)`);
+const info = await page.evaluate(() => ({ w: PROMO.width, h: PROMO.height, fps: PROMO.fps, dur: PROMO.duration, frames: PROMO.frames, cut: PROMO.cut }));
+console.log(`promo ${info.cut} ${info.w}x${info.h} @${info.fps}fps, ${info.dur}s (${info.frames} frames)`);
 
 const start = Number(process.env.START || 0);
 const count = Math.min(info.frames - start, Number(process.env.FRAMES || info.frames));
 const partial = start !== 0 || count !== info.frames;
 
 // 소리 (일부만 뽑는 확인용 렌더에서는 건너뛴다 — 전체 렌더 결과물을 덮어쓰지 않게)
-const wavPath = join(OUT, "molang-promo.wav");
+const wavPath = join(OUT, `molang-promo${CUT ? `-${CUT}` : ""}.wav`);
 // 가로형은 세로형 720p MP4에 이미 들어 있는 AAC 소리를 그대로 복사한다 (비트 단위로 같은 소리).
 // 그 파일이 없을 때만 molang-promo.wav를 쓰고, wav도 없으면 새로 만든다.
-const vertAudio = join(OUT, "molang-promo-720.mp4");
+const vertAudio = join(OUT, CUT ? `molang-promo-${CUT}.mp4` : "molang-promo-720.mp4");
 const copyAudio = LAND && !partial && existsSync(vertAudio);
 if (!partial && !copyAudio && !(LAND && existsSync(wavPath))) {
   const audio = await page.evaluate(async () => {
     const r = await PROMO.renderAudio();
     return r;
   });
-  const rawWav = join(OUT, "molang-promo-raw.wav");
+  const rawWav = join(OUT, `molang-promo${CUT ? `-${CUT}` : ""}-raw.wav`);
   writeFileSync(rawWav, Buffer.from(audio.base64, "base64"));
   // 숏폼 플랫폼 기준에 가깝게: 약 -16 LUFS, true peak -3.5 dBFS (AAC 인코딩 뒤에도 -2 dBFS 아래)
   await run(["-i", rawWav, "-af", "loudnorm=I=-16:TP=-3.5:LRA=7,aresample=44100", "-c:a", "pcm_s16le", wavPath]);
   unlinkSync(rawWav);
   console.log(`audio: raw peak ${audio.peak.toFixed(3)} → tanh soft limit → loudnorm -16 LUFS / TP -3.5 dBFS`);
 }
-if (LAND && !partial) console.log(copyAudio ? "audio: copying the AAC track of molang-promo-720.mp4 (same bits as the vertical cut)" : "audio: reusing molang-promo.wav");
+if (LAND && !partial) console.log(copyAudio ? `audio: copying the AAC track of ${vertAudio.split(/[\\/]/).pop()} (same bits as the vertical cut)` : `audio: reusing ${wavPath.split(/[\\/]/).pop()}`);
 const mp4 = join(OUT, `molang-promo${SUFFIX}${partial ? "-partial" : ""}.mp4`);
 
 async function grab(t) {
@@ -122,7 +130,10 @@ if (!partial) {
 }
 await browser.close();
 
-if (!partial && LAND) {
+if (CUT) {
+  // 컷은 1080p MP4와 포스터만 만든다 (720p·GIF는 기본 컷에서만)
+  if (!partial) for (const f of [`molang-promo${SUFFIX}.mp4`, `poster${SUFFIX}.png`]) console.log(`${f}: ${(statSync(join(OUT, f)).size / 1e6).toFixed(2)} MB`);
+} else if (!partial && LAND) {
   await run(["-i", mp4, "-vf", "scale=1280:720:flags=lanczos", "-c:v", "libx264", "-preset", "slow", "-crf", "20", "-pix_fmt", "yuv420p", "-c:a", "copy", "-movflags", "+faststart", join(OUT, "molang-promo-landscape-720.mp4")]);
   for (const f of ["molang-promo-landscape.mp4", "molang-promo-landscape-720.mp4", "poster-landscape.png"]) {
     console.log(`${f}: ${(statSync(join(OUT, f)).size / 1e6).toFixed(2)} MB`);
