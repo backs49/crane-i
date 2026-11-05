@@ -1,4 +1,4 @@
-// 몰랑크레인 홍보 영상 (1080x1920, 30fps, 22초).
+// 몰랑크레인 홍보 영상 (세로 1080x1920 · 가로 1920x1080, 30fps, 22초). 가로형은 ?format=landscape 또는 PROMO.setFormat("landscape").
 // 게임의 실제 그림 함수(Draw, MyPlush, Room, Village)로 장면을 그린다.
 // renderFrame(t)는 t(초)만으로 그림이 정해지는 순수 함수다 (Math.random·Date.now 없음).
 (function () {
@@ -15,6 +15,10 @@
   canvas.width = W;
   canvas.height = H;
   const ctx = canvas.getContext("2d");
+  // 화면 형식: "vertical"(1080x1920, 기본) 또는 "landscape"(1920x1080, 유튜브·플레이 스토어)
+  let FORMAT = "vertical";
+  let capSink = null; // 가로형에서 자막을 모아 두는 곳
+  let BUBBLE_K = 1; // 말풍선 크기 배율 (가로형은 무대가 줄어드니 키운다)
 
   const C = {
     night: "#1a0b2c",
@@ -127,6 +131,11 @@
     const size = opts.size || 110;
     const alpha = opts.alpha == null ? 1 : opts.alpha;
     if (alpha <= 0) return;
+    // 가로형: 자막은 왼쪽 칸에 따로 모아 그린다 (세로형은 capSink가 없어 그대로)
+    if (capSink) {
+      capSink.push({ text, y, opts, alpha: ctx.globalAlpha * alpha });
+      return;
+    }
     ctx.save();
     ctx.globalAlpha *= alpha;
     const s = fitFont(text, size, opts.maxW || 880);
@@ -1632,7 +1641,7 @@
     if (bk > 0) {
       const cat = walkers.find((w) => w.type === "cat");
       const cs = vw2s(cat.x, cat.y);
-      bubble(540, cs.y - 250, CAT_LINE, bk, cs.x, cs.y - 60);
+      bubble(540, cs.y - 250, CAT_LINE, bk * BUBBLE_K, cs.x, cs.y - 60);
     }
   }
 
@@ -1987,15 +1996,15 @@
     { type: "panda", x: 884, y: 885 },
   ];
 
-  function endTitle(t) {
+  function endTitle(t, cx = 540, cy = TITLE_Y, size = 170) {
     ctx.save();
-    ctx.font = "170px 'Jua'";
+    ctx.font = `${size}px 'Jua'`;
     ctx.textBaseline = "middle";
     ctx.textAlign = "center";
     const chars = Array.from(TITLE);
     const widths = chars.map((ch) => ctx.measureText(ch).width);
     const total = widths.reduce((a, b) => a + b, 0);
-    let x = 540 - total / 2;
+    let x = cx - total / 2;
     chars.forEach((ch, i) => {
       const cx = x + widths[i] / 2;
       x += widths[i];
@@ -2003,7 +2012,7 @@
       const t0 = 18.6 + i * (3 / FPS);
       const fall = seg(t, t0, t0 + 0.16);
       if (fall <= 0) return;
-      const yy = TITLE_Y - (1 - E.inQuad(fall)) * 200;
+      const yy = cy - (1 - E.inQuad(fall)) * 200;
       let sx = 1;
       let sy = 1;
       if (fall < 1) {
@@ -2144,6 +2153,14 @@
     } catch (e) {
       /* ignore */
     }
+    if (FORMAT === "landscape") renderLandscape(t);
+    else {
+      BUBBLE_K = 1;
+      renderVertical(t);
+    }
+  }
+
+  function renderVertical(t) {
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.globalAlpha = 1;
     ctx.globalCompositeOperation = "source-over";
@@ -2331,6 +2348,371 @@
       ctx.restore();
     });
     photoBorder(ROOM_R, 1, 1);
+  }
+
+  // ================= 가로형 1920x1080 =================
+  // 세로형 장면 함수를 그대로 쓰되, 카드(무대)는 오른쪽에 줄여 놓고 자막은 왼쪽 칸에 다시 짠다.
+  // 세로형 그림에는 손대지 않는다 (capSink가 없으면 caption()은 예전과 똑같이 그린다).
+  const LW = 1920;
+  const LH = 1080;
+  const SAFE_X = 96; // 유튜브 제목 안전 영역 (좌우 5%)
+  const lRng = mulberry32(SEED ^ 0x2545f491);
+  const LSTARS = Array.from({ length: 96 }, () => ({
+    x: lRng() * LW,
+    y: lRng() * LH,
+    r: 4 + lRng() * 9,
+    c: lRng() < 0.6 ? C.lemon : C.pink,
+    d: 0.3 + lRng() * 0.7,
+  }));
+
+  function backdropL(t, parallax = 0, flash = false) {
+    if (flash) {
+      ctx.fillStyle = C.grape;
+      ctx.fillRect(0, 0, LW, LH);
+    } else {
+      const g = ctx.createRadialGradient(LW / 2, LH * 0.45, 60, LW / 2, LH / 2, 1150);
+      g.addColorStop(0, C.plum);
+      g.addColorStop(1, C.night);
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, LW, LH);
+    }
+    LSTARS.forEach((s, i) => {
+      const a = clamp(0.4 + 0.6 * Math.sin(3 * t + i));
+      let x = s.x + parallax * s.d;
+      x = ((x % (LW + 40)) + LW + 40) % (LW + 40) - 20;
+      ctx.globalAlpha = a * 0.85;
+      ctx.fillStyle = s.c;
+      Draw.star(ctx, x, s.y, s.r, 4, 0.42);
+      ctx.fill();
+    });
+    ctx.globalAlpha = 1;
+  }
+
+  // 무대: 세로형 좌표 (fx, fy)를 화면 (x, y)에 s배로 놓는다. 카드 반쪽 너비 hw로 왼쪽 칸 끝을 정한다.
+  const ST = { s: 0.84, fx: 540, fy: 1085, x: 1418, y: 540, hw: 483 };
+  const ST6 = { s: 0.98, fx: 540, fy: 950, x: 1354, y: 540, hw: 480 };
+  const toScreen = (st, p) => pt(st.x + (p.x - st.fx) * st.s, st.y + (p.y - st.fy) * st.s);
+  function column(st) {
+    const right = st.x - st.hw * st.s - 56;
+    // 테두리·빛 번짐까지 칸 안에 들게 글자 폭은 조금 더 좁게
+    return { cx: (SAFE_X + right) / 2, maxW: right - SAFE_X - 48 };
+  }
+
+  function staged(st, fn) {
+    const prev = capSink;
+    capSink = [];
+    ctx.save();
+    ctx.translate(st.x, st.y);
+    ctx.scale(st.s, st.s);
+    ctx.translate(-st.fx, -st.fy);
+    fn();
+    ctx.restore();
+    const caps = capSink;
+    capSink = prev;
+    leftCaptions(caps, st);
+  }
+
+  // 왼쪽 칸 자막: 큰 제목은 두 줄까지 나누고, 작은 줄은 그 아래
+  const HEAD_CY = 500;
+  // 두 줄로 나눌 때는 두 줄 길이가 비슷한 자리에서 자른다
+  function balancedLines(text, maxW) {
+    const words = text.split(" ");
+    if (words.length < 2) return [text];
+    let best = null;
+    for (let i = 1; i < words.length; i++) {
+      const a = words.slice(0, i).join(" ");
+      const b = words.slice(i).join(" ");
+      const w = Math.max(ctx.measureText(a).width, ctx.measureText(b).width);
+      if (!best || w < best.w) best = { w, lines: [a, b] };
+    }
+    return best.w <= maxW ? best.lines : wrapLines(text, maxW);
+  }
+
+  function layoutLines(text, size, maxW, min) {
+    let s = size;
+    ctx.font = `${s}px 'Jua'`;
+    const lines = ctx.measureText(text).width > maxW ? balancedLines(text, maxW) : [text];
+    const widest = () => Math.max(...lines.map((l) => ctx.measureText(l).width));
+    while (widest() > maxW && s > min) {
+      s -= 2;
+      ctx.font = `${s}px 'Jua'`;
+    }
+    return { lines, size: s };
+  }
+
+  function leftCaptions(caps, st) {
+    if (!caps.length) return;
+    const col = column(st);
+    let headBottom = HEAD_CY + 60;
+    const heads = caps.filter((c) => !c.opts.sub);
+    const subs = caps.filter((c) => c.opts.sub);
+    for (const c of heads) {
+      const L = layoutLines(c.text, Math.round((c.opts.size || 110) * 1.12), col.maxW, 88);
+      const lh = L.size * 1.14;
+      headBottom = Math.max(headBottom, HEAD_CY + (L.lines.length * lh) / 2);
+      drawCapLines(c, L, col.cx, HEAD_CY, lh);
+    }
+    for (const c of subs) {
+      const size = Math.max(56, (c.opts.size || 62) * 1.08);
+      const L = layoutLines(c.text, size, col.maxW, 48);
+      drawCapLines(c, L, col.cx, headBottom + 40 + L.size * 0.6, L.size * 1.14);
+    }
+  }
+
+  function drawCapLines(c, L, cx, cy, lh) {
+    const o = c.opts;
+    if (c.alpha <= 0) return;
+    ctx.save();
+    ctx.globalAlpha *= c.alpha;
+    ctx.font = `${L.size}px 'Jua'`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.translate(cx + (o.dx || 0), cy + (o.dy || 0));
+    const sc = o.scale == null ? 1 : o.scale;
+    ctx.scale(sc * (o.sx || 1), sc * (o.sy || 1));
+    ctx.lineJoin = "round";
+    L.lines.forEach((line, i) => {
+      const y = (i - (L.lines.length - 1) / 2) * lh;
+      ctx.strokeStyle = C.grape;
+      ctx.lineWidth = o.sub ? 14 : 20;
+      ctx.shadowColor = C.pink;
+      ctx.shadowBlur = o.sub ? 18 : 30;
+      ctx.strokeText(line, 0, y);
+      ctx.shadowBlur = 0;
+      ctx.fillStyle = o.color || (o.sub ? C.lemon : C.cream);
+      ctx.fillText(line, 0, y);
+    });
+    ctx.restore();
+  }
+
+  // ---- 가로형 엔드 카드 ----
+  const TITLE_Y_L = 340;
+  // 넓은 화면: 한 줄로 늘어서고 가운데에 콩이, 양옆에 황금 별·황금 유니콘
+  const END_ROW_L = [
+    { type: "bear", x: 960 - 650, y: 642 },
+    { type: "bunny", x: 960 - 440, y: 632 },
+    { type: "star", x: 960 - 230, y: 620, golden: true },
+    { type: "unicorn", x: 960 + 230, y: 620, golden: true },
+    { type: "chick", x: 960 + 440, y: 632 },
+    { type: "panda", x: 960 + 650, y: 642 },
+  ];
+
+  function scene7L(t) {
+    const u = Math.min(t, DUR - 0.5);
+    const pulse = 0.75 + 0.25 * Math.sin(u * 2.4);
+    ctx.save();
+    ctx.globalAlpha = seg(t, 18.6, 18.8);
+    ctx.strokeStyle = C.pink;
+    ctx.lineWidth = 8;
+    ctx.shadowColor = C.pink;
+    ctx.shadowBlur = 30 * pulse;
+    ctx.beginPath();
+    ctx.roundRect(110, 60, 1700, 960, 60);
+    ctx.stroke();
+    ctx.globalAlpha *= 0.5;
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.roundRect(132, 82, 1656, 916, 46);
+    ctx.stroke();
+    ctx.restore();
+
+    // 위에서 좌우로 오가는 집게 (레일은 액자 폭만큼 길게)
+    const ga = seg(t, 18.6, 18.9);
+    if (ga > 0) {
+      ctx.save();
+      ctx.globalAlpha = ga;
+      ctx.beginPath();
+      ctx.rect(134, 84, 1652, 172);
+      ctx.clip();
+      const Z = 1.8;
+      const clawY = 150;
+      ctx.translate(LW / 2 - 210 * Z, 172 - clawY * Z);
+      ctx.scale(Z, Z);
+      const claw = { x: 210 + 300 * Math.sin(0.9 * (u - 18.6)), y: clawY, z: 0.4, open: 0.5 + 0.2 * Math.sin(3 * u) };
+      ctx.save();
+      ctx.globalAlpha *= 0.55;
+      ctx.strokeStyle = "#e8d6ff";
+      ctx.lineWidth = 6;
+      ctx.lineCap = "round";
+      ctx.beginPath();
+      ctx.moveTo(-(LW / 2 - 210 * Z - 170) / Z, clawY);
+      ctx.lineTo(420 + (LW / 2 - 210 * Z - 170) / Z, clawY);
+      ctx.stroke();
+      ctx.restore();
+      Draw.gantry(ctx, claw);
+      Draw.claw(ctx, claw);
+      ctx.restore();
+    }
+
+    endTitle(u, LW / 2, TITLE_Y_L, 190);
+    burst(LW / 2, TITLE_Y_L, t - 18.6, { stars: 10, hearts: 4, dist: 460, seed: SEED + 9, scale: 1.1, coreDur: 0.1 });
+
+    const ra = E.outBack(seg(t, 18.85, 19.15));
+    if (ra > 0) {
+      ctx.save();
+      ctx.translate(LW / 2, 660);
+      ctx.scale(ra, ra);
+      ctx.translate(-LW / 2, -660);
+      END_ROW_L.forEach((p, i) => endPlush(p, i < 3 ? i : i + 1, u, p.type === "star" ? 56 : 62, null));
+      endPlush({ type: "mine", x: LW / 2, y: 635 }, 3, u, 96, KONGI);
+      ctx.restore();
+    }
+
+    const line = "뽑고, 모으고, 함께 놀아요";
+    const chars = Array.from(line);
+    const n = Math.floor(seg(u, 19.4, 20.0) * chars.length + 1e-6);
+    if (n > 0) {
+      ctx.save();
+      const size = fitFont(line, 84, 1400);
+      ctx.font = `${size}px 'Jua'`;
+      ctx.textAlign = "left";
+      ctx.textBaseline = "middle";
+      const full = ctx.measureText(line).width;
+      const shown = chars.slice(0, n).join("");
+      const x0 = LW / 2 - full / 2;
+      ctx.lineJoin = "round";
+      ctx.strokeStyle = C.grape;
+      ctx.lineWidth = 16;
+      ctx.strokeText(shown, x0, 834);
+      ctx.fillStyle = C.lemon;
+      ctx.fillText(shown, x0, 834);
+      ctx.restore();
+    }
+    const pk = E.outBack(seg(u, 20.2, 20.45));
+    if (pk > 0) pill(LW / 2, 942, "광고 없음 · 개인정보 수집 없음", { size: 50, bg: C.mint, color: C.ink, scale: pk, pad: 48 });
+  }
+
+  function renderLandscape(t) {
+    BUBBLE_K = 1.4; // 대사 글자가 1080 높이에서 약 54px (카드 0.84배를 되돌린다), 오른쪽 안전 영역 안
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.globalAlpha = 1;
+    ctx.globalCompositeOperation = "source-over";
+    ctx.shadowBlur = 0;
+    ctx.textAlign = "left";
+
+    if (t < 1.8) {
+      const flash = t >= 1.4 && t < 1.4 + 2 / FPS;
+      backdropL(t, 0, flash);
+      staged(ST, () => scene1(t));
+    } else if (t < 4.85) {
+      backdropL(t);
+      staged(ST, () => scene2(t));
+    } else if (t < 5.12) {
+      // 화면 전체가 왼쪽으로 밀리며 다음 장면이 들어온다
+      const k = E.inOutCubic(seg(t, 4.85, 5.12));
+      backdropL(t, -320 * k);
+      ctx.save();
+      ctx.translate(-1960 * k, 0);
+      staged(ST, () => scene2(t));
+      ctx.restore();
+      ctx.save();
+      ctx.translate(1960 * (1 - k), 0);
+      staged(ST, () => scene3(Math.max(t, 5.0)));
+      ctx.restore();
+    } else if (t < 9.45) {
+      backdropL(t, -320);
+      staged(ST, () => scene3(t));
+    } else if (t < 9.8) {
+      backdropL(t, -320);
+      staged(ST, () => scene3(t));
+      const k = E.inCubic(seg(t, 9.45, 9.8));
+      const c = toScreen(ST, KONGI_MINI());
+      ctx.save();
+      Draw.heart(ctx, c.x, c.y, 3200 * k);
+      ctx.clip();
+      backdropL(t);
+      staged(ST, () => scene4(Math.max(t, 9.6)));
+      ctx.restore();
+      if (k < 1) {
+        ctx.save();
+        ctx.strokeStyle = C.pink;
+        ctx.lineWidth = 14;
+        ctx.shadowColor = C.pink;
+        ctx.shadowBlur = 24;
+        Draw.heart(ctx, c.x, c.y, 3200 * k);
+        ctx.stroke();
+        ctx.restore();
+      }
+    } else if (t < 11.6) {
+      backdropL(t);
+      staged(ST, () => scene4(t));
+    } else if (t < 12.05) {
+      backdropL(t);
+      staged(ST, () => polaroid(t));
+    } else if (t < 15.75) {
+      backdropL(t);
+      staged(ST, () => {
+        scene5(t);
+        scene5Caption(t);
+      });
+    } else if (t < 16.2) {
+      backdropL(t);
+      const sink = E.inCubic(seg(t, 15.8, 16.15));
+      const dark = seg(t, 15.75, 16.0);
+      ctx.save();
+      ctx.translate(0, 1200 * sink);
+      staged(ST, () => scene5(t, dark));
+      ctx.restore();
+      ctx.save();
+      ctx.globalAlpha = 1 - seg(t, 15.75, 15.9);
+      staged(ST, () => scene5Caption(t));
+      ctx.restore();
+      const rise = E.outBack(seg(t, 15.85, 16.2));
+      if (rise > 0) {
+        ctx.save();
+        ctx.translate(0, 1200 * (1 - rise));
+        staged(ST6, () => scene6(Math.max(t, 16.0)));
+        ctx.restore();
+      }
+    } else if (t < COLLAPSE_T) {
+      backdropL(t);
+      staged(ST6, () => scene6(t));
+    } else if (t < 18.6) {
+      backdropL(t);
+      const top = toScreen(ST6, CLIP_TOP);
+      const k = seg(t, COLLAPSE_T, 18.54);
+      // 카드만 위쪽 끝을 축으로 줄인다 (부풀지 않게 1에서 멈춘다). 왼쪽 자막은 제자리에서 흐려진다.
+      const s = Math.min(1, 1 - E.inBack(k));
+      const prevSink = capSink;
+      capSink = [];
+      if (s > 0.01) {
+        ctx.save();
+        ctx.globalAlpha = 1 - seg(k, 0.6, 1);
+        ctx.translate(top.x, top.y);
+        ctx.scale(s, s);
+        ctx.translate(-top.x, -top.y);
+        ctx.translate(ST6.x, ST6.y);
+        ctx.scale(ST6.s, ST6.s);
+        ctx.translate(-ST6.fx, -ST6.fy);
+        scene6(COLLAPSE_T);
+        ctx.restore();
+      }
+      const caps = capSink;
+      capSink = prevSink;
+      ctx.save();
+      ctx.globalAlpha = 1 - seg(k, 0, 0.6);
+      leftCaptions(caps, ST6);
+      ctx.restore();
+      const f = E.inOutCubic(seg(t, 18.46, 18.6));
+      ctx.save();
+      ctx.globalAlpha = seg(t, COLLAPSE_T + 0.02, COLLAPSE_T + 0.08);
+      ctx.translate(lerp(top.x, LW / 2, f), lerp(top.y, TITLE_Y_L, f));
+      ctx.rotate(t * 8);
+      const r = 30 + 40 * Math.sin(seg(t, COLLAPSE_T, 18.6) * Math.PI) + 10;
+      ctx.shadowColor = C.lemon;
+      ctx.shadowBlur = 40;
+      ctx.fillStyle = C.lemon;
+      ctx.strokeStyle = "#c48a00";
+      ctx.lineWidth = 5;
+      Draw.star(ctx, 0, 0, r, 5, 0.5);
+      ctx.fill();
+      ctx.stroke();
+      ctx.restore();
+    } else {
+      const u = Math.min(t, HOLD_T);
+      backdropL(u);
+      scene7L(u);
+    }
   }
 
   // ---------- 소리 (OfflineAudioContext로 합성) ----------
@@ -2612,10 +2994,29 @@
     return true;
   }
 
+  const FORMATS = { vertical: { width: W, height: H }, landscape: { width: LW, height: LH } };
+  function setFormat(f) {
+    if (!FORMATS[f]) throw new Error(`unknown format: ${f}`);
+    FORMAT = f;
+    canvas.width = FORMATS[f].width;
+    canvas.height = FORMATS[f].height;
+    if (canvas.style.width) fit(); // 반복 재생 화면에서만 크기를 다시 맞춘다
+    return FORMATS[f];
+  }
+
   const readyP = ready();
   window.PROMO = {
-    width: W,
-    height: H,
+    get width() {
+      return FORMATS[FORMAT].width;
+    },
+    get height() {
+      return FORMATS[FORMAT].height;
+    },
+    get format() {
+      return FORMAT;
+    },
+    formats: Object.keys(FORMATS),
+    setFormat,
     fps: FPS,
     duration: DUR,
     holdT: HOLD_T,
@@ -2627,15 +3028,17 @@
 
   // ---------- 보통으로 열면 반복 재생 ----------
   const params = new URLSearchParams(location.search);
+  if (params.get("format")) setFormat(params.get("format"));
   if (params.has("render")) {
     document.body.classList.add("render");
     return;
   }
   const realNow = Performance.prototype.now.bind(performance);
   function fit() {
-    const s = Math.min(window.innerWidth / W, window.innerHeight / H);
-    canvas.style.width = `${W * s}px`;
-    canvas.style.height = `${H * s}px`;
+    const { width: fw, height: fh } = FORMATS[FORMAT];
+    const s = Math.min(window.innerWidth / fw, window.innerHeight / fh);
+    canvas.style.width = `${fw * s}px`;
+    canvas.style.height = `${fh * s}px`;
   }
   window.addEventListener("resize", fit);
   fit();

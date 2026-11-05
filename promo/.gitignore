@@ -1,6 +1,9 @@
 # 렌더 결과물: 가벼운 영상(720p)과 포스터만 저장소에 남기고 나머지는 다시 만든다
-#   node tools/render-promo.mjs
+#   node tools/render-promo.mjs                  (세로형 1080x1920)
+#   FORMAT=landscape node tools/render-promo.mjs (가로형 1920x1080)
 out/*
 !out/molang-promo-720.mp4
 !out/poster.png
+!out/molang-promo-landscape-720.mp4
+!out/poster-landscape.png
 frames/
