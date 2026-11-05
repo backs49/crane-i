@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>몰랑크레인 홍보 영상</title>
+    <link rel="stylesheet" href="../assets/fonts/fonts.css" />
+    <style>
+      html, body { margin: 0; height: 100%; background: #1a0b2c; overflow: hidden; }
+      body { display: flex; align-items: center; justify-content: center; }
+      canvas { display: block; }
+      body.render { display: block; }
+      #hint {
+        position: fixed; left: 50%; bottom: 14px; transform: translateX(-50%);
+        font: 15px 'Gowun Dodum', sans-serif; color: #fff0f8; opacity: 0.75;
+        background: rgba(53, 20, 80, 0.8); padding: 6px 14px; border-radius: 999px; pointer-events: none;
+      }
+      body.render #hint { display: none; }
+    </style>
+  </head>
+  <body>
+    <canvas id="promo" width="1080" height="1920"></canvas>
+    <div id="hint">화면을 누르면 소리와 함께 처음부터 재생해요</div>
+    <script src="../js/config.js"></script>
+    <script src="../js/i18n.js"></script>
+    <script src="../js/lang/ko.js"></script>
+    <script src="../js/myplush.js"></script>
+    <script src="../js/room.js"></script>
+    <script src="../js/village.js"></script>
+    <script src="../js/draw.js"></script>
+    <script src="promo.js"></script>
+  </body>
+</html>

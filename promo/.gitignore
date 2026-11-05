@@ -1,0 +1,6 @@
+# 렌더 결과물: 가벼운 영상(720p)과 포스터만 저장소에 남기고 나머지는 다시 만든다
+#   node tools/render-promo.mjs
+out/*
+!out/molang-promo-720.mp4
+!out/poster.png
+frames/
